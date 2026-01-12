@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getPocketBase } from '@/lib/pocketbase';
+import { login as apiLogin, signup as apiSignup, logout as apiLogout, getCurrentUser } from '@/lib/auth';
 import type { RecordModel } from 'pocketbase';
 
 interface AuthContextType {
@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, passwordConfirm: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,46 +19,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Only initialize in browser
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const pb = getPocketBase();
-
-    // Check if user is already authenticated
-    setUser(pb.authStore.model as RecordModel | null);
-    setIsLoading(false);
-
-    // Listen for auth changes
-    const unsubscribe = pb.authStore.onChange((token, model) => {
-      setUser(model as RecordModel | null);
-    });
-
-    return () => {
-      unsubscribe();
+    // Fetch current user from cookie
+    const fetchUser = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
     };
+
+    fetchUser();
   }, []);
 
   const login = async (email: string, password: string) => {
-    const pb = getPocketBase();
-    await pb.collection('users').authWithPassword(email, password);
+    const data = await apiLogin(email, password);
+    setUser(data.user);
   };
 
   const signup = async (email: string, password: string, passwordConfirm: string) => {
-    const pb = getPocketBase();
-    await pb.collection('users').create({
-      email,
-      password,
-      passwordConfirm,
-    });
-    // Auto-login after signup
-    await pb.collection('users').authWithPassword(email, password);
+    const data = await apiSignup(email, password, passwordConfirm);
+    setUser(data.user);
   };
 
-  const logout = () => {
-    const pb = getPocketBase();
-    pb.authStore.clear();
+  const logout = async () => {
+    await apiLogout();
+    setUser(null);
   };
 
   return (
