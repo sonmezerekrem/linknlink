@@ -11,10 +11,15 @@ async function getAuthenticatedUser() {
     return null;
   }
 
-  const authData = JSON.parse(authCookie.value);
-  const pb = getServerPocketBase();
-  pb.authStore.save(authData.token, authData.model);
-  return authData.model;
+  try {
+    const authData = JSON.parse(authCookie.value);
+    const pb = getServerPocketBase();
+    pb.authStore.save(authData.token, authData.model);
+    return authData.model;
+  } catch (error) {
+    console.error('Invalid auth cookie:', error);
+    return null;
+  }
 }
 
 // OpenGraph scraper with proper timeout
@@ -91,7 +96,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const authData = JSON.parse(authCookie.value);
+    let authData;
+    try {
+      authData = JSON.parse(authCookie.value);
+    } catch (error) {
+      console.error('Invalid auth cookie:', error);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     pb.authStore.save(authData.token, authData.model);
 
     const searchParams = request.nextUrl.searchParams;
@@ -118,7 +130,6 @@ export async function GET(request: NextRequest) {
     const result = await pb.collection('links').getList(page, perPage, {
       filter,
       expand: 'tags',
-      sort: '-created',
     });
 
     return NextResponse.json({
@@ -129,13 +140,13 @@ export async function GET(request: NextRequest) {
       totalPages: result.totalPages,
     });
   } catch (error: any) {
-    console.error('GET /api/links error:', error);
+    console.error('GET /api/links error:', error?.data || error);
     return NextResponse.json(
       { 
-        error: error.message || 'Failed to fetch links',
-        ...(process.env.NODE_ENV === 'development' && { details: error.stack })
+        error: error?.data?.message || error?.message || 'Failed to fetch links',
+        ...(process.env.NODE_ENV === 'development' && { details: error?.data || error?.stack || error })
       },
-      { status: 500 }
+      { status: error?.status || 500 }
     );
   }
 }
@@ -156,7 +167,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const authData = JSON.parse(authCookie.value);
+    let authData;
+    try {
+      authData = JSON.parse(authCookie.value);
+    } catch (error) {
+      console.error('Invalid auth cookie:', error);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     pb.authStore.save(authData.token, authData.model);
 
     const body = await request.json();
@@ -205,10 +223,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(link);
   } catch (error: any) {
-    console.error('POST /api/links error:', error);
+    console.error('POST /api/links error:', error?.data || error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create link' },
-      { status: 400 }
+      { error: error?.data?.message || error?.message || 'Failed to create link' },
+      { status: error?.status || 400 }
     );
   }
 }
