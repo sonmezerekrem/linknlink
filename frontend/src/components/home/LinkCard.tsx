@@ -24,7 +24,7 @@ export function LinkCard({ link, onToggleTag, onEdit, onDelete }: LinkCardProps)
   const imageUrl = getLinkImage(link);
 
   return (
-    <Card className="group hover:shadow-xl transition-all duration-300 overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+    <Card className="group hover:shadow-xl transition-all duration-300 overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 pt-0 gap-2">
       <a
         href={link.url}
         target="_blank"
@@ -83,20 +83,8 @@ export function LinkCard({ link, onToggleTag, onEdit, onDelete }: LinkCardProps)
           </DropdownMenu>
         </div>
 
-        {link.og_site_name && (
-          <p className="text-xs text-muted-foreground">
-            {link.og_site_name}
-          </p>
-        )}
-
-        {link.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {getLinkDescription(link)}
-          </p>
-        )}
-
         {link.expand?.tags && link.expand.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
+          <div className="flex flex-wrap gap-1.5">
             {link.expand.tags.map((tag) => (
               <Badge
                 key={tag.id}
@@ -107,6 +95,18 @@ export function LinkCard({ link, onToggleTag, onEdit, onDelete }: LinkCardProps)
               </Badge>
             ))}
           </div>
+        )}
+
+        {link.og_site_name && (
+          <p className="text-xs text-muted-foreground">
+            {link.og_site_name}
+          </p>
+        )}
+
+        {link.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {getLinkDescription(link)}
+          </p>
         )}
       </CardContent>
     </Card>
