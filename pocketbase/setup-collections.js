@@ -115,6 +115,24 @@ async function setupCollections() {
                         max: 5000,
                     },
                     {
+                        name: 'og_image',
+                        type: 'url'
+                    },
+                    {
+                        name: 'og_site_name',
+                        type: 'text',
+                        max: 200
+                    },
+                    {
+                        name: 'og_type',
+                        type: 'text',
+                        max: 100
+                    },
+                    {
+                        name: 'favicon',
+                        type: 'url'
+                    },
+                    {
                         name: 'notes',
                         type: 'text',
                         required: false,

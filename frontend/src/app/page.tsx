@@ -83,8 +83,6 @@ function HomeContent() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newLink, setNewLink] = useState({
     url: '',
-    title: '',
-    description: '',
     tags: [] as string[],
   });
 
@@ -134,8 +132,8 @@ function HomeContent() {
       const response = await fetch('/api/tags', {
         credentials: 'include',
       });
-      const data = await response.json();
-      setTags(data);
+    const data = await response.json();
+    setTags(data);
     } catch (error) {
       console.error('Failed to fetch tags:', error);
     }
@@ -176,7 +174,7 @@ function HomeContent() {
       }
 
       setIsDialogOpen(false);
-      setNewLink({ url: '', title: '', description: '', tags: [] });
+      setNewLink({ url: '', tags: [] });
       fetchLinks();
     } catch (error: any) {
       alert(error.message || 'Failed to create link');
@@ -276,7 +274,7 @@ function HomeContent() {
                 <DialogHeader>
                   <DialogTitle>Add New Link</DialogTitle>
                   <DialogDescription>
-                    Add a new link to your collection
+                    Paste a URL. We&apos;ll pull title and description automatically.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -289,28 +287,6 @@ function HomeContent() {
                       value={newLink.url}
                       onChange={(e) =>
                         setNewLink({ ...newLink, url: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Title</Label>
-                    <Input
-                      id="title"
-                      placeholder="Link title"
-                      value={newLink.title}
-                      onChange={(e) =>
-                        setNewLink({ ...newLink, title: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Input
-                      id="description"
-                      placeholder="Link description"
-                      value={newLink.description}
-                      onChange={(e) =>
-                        setNewLink({ ...newLink, description: e.target.value })
                       }
                     />
                   </div>
