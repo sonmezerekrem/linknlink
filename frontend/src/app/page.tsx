@@ -196,13 +196,40 @@ function HomeContent() {
     return tag?.name || 'Unknown';
   };
 
+  const decode = (value?: string) => {
+    if (!value) return value;
+    return value
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#x27;/g, "'")
+      .trim();
+  };
+
   const getLinkTitle = (link: Link) => {
-    if (link.title) return link.title;
+    const decoded = decode(link.title);
+    if (decoded) return decoded;
     try {
       return new URL(link.url).hostname;
     } catch {
       return link.url;
     }
+  };
+
+  const getLinkDescription = (link: Link) => {
+    const decoded = decode(link.description);
+    if (decoded) return decoded;
+    try {
+      return new URL(link.url).hostname;
+    } catch {
+      return link.url;
+    }
+  };
+
+  const getLinkImage = (link: Link) => {
+    return link.og_image || link.favicon || '';
   };
 
   return (
@@ -319,97 +346,127 @@ function HomeContent() {
           <>
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {links.map((link) => (
-                  <Card key={link.id} className="hover:shadow-lg transition-shadow">
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="line-clamp-2">
-                          {getLinkTitle(link)}
-                        </CardTitle>
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </div>
-                      {link.og_site_name && (
-                        <CardDescription>{link.og_site_name}</CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      {link.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                          {link.description}
-                        </p>
-                      )}
-                      {link.expand?.tags && link.expand.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {link.expand.tags.map((tag) => (
-                            <Badge
-                              key={tag.id}
-                              variant="outline"
-                              style={{ borderColor: tag.color || '#3b82f6' }}
-                            >
-                              {tag.name}
-                            </Badge>
-                          ))}
+                {links.map((link) => {
+                  const imageUrl = getLinkImage(link);
+                  return (
+                    <Card key={link.id} className="hover:shadow-lg transition-shadow overflow-hidden pt-0">
+                      {imageUrl ? (
+                        <div className="h-48 w-full overflow-hidden bg-muted">
+                          <img
+                            src={imageUrl}
+                            alt={getLinkTitle(link)}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
                         </div>
+                      ) : (
+                        <div className="h-40 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
                       )}
-                    </CardContent>
-                  </Card>
-                ))}
+                      <CardHeader>
+                        <div className="flex items-start justify-between gap-2">
+                          <CardTitle className="line-clamp-2">
+                            {getLinkTitle(link)}
+                          </CardTitle>
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </div>
+                        {link.og_site_name && (
+                          <CardDescription>{link.og_site_name}</CardDescription>
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        {link.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                            {getLinkDescription(link)}
+                          </p>
+                        )}
+                        {link.expand?.tags && link.expand.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {link.expand.tags.map((tag) => (
+                              <Badge
+                                key={tag.id}
+                                variant="outline"
+                                style={{ borderColor: tag.color || '#3b82f6' }}
+                              >
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             ) : (
               <div className="space-y-4">
-                {links.map((link) => (
-                  <Card key={link.id} className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-2 mb-2">
-                            <CardTitle className="line-clamp-1">
-                              {getLinkTitle(link)}
-                            </CardTitle>
-                            <a
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
+                {links.map((link) => {
+                  const imageUrl = getLinkImage(link);
+                  return (
+                    <Card key={link.id} className="hover:shadow-lg transition-shadow py-0">
+                      <CardContent className="p-6">
+                        <div className="flex items-start gap-4">
+                          <div className="h-24 w-32 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+                            {imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt={getLinkTitle(link)}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+                            )}
                           </div>
-                          {link.og_site_name && (
-                            <CardDescription className="mb-2">
-                              {link.og_site_name}
-                            </CardDescription>
-                          )}
-                          {link.description && (
-                            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                              {link.description}
-                            </p>
-                          )}
-                          {link.expand?.tags && link.expand.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {link.expand.tags.map((tag) => (
-                                <Badge
-                                  key={tag.id}
-                                  variant="outline"
-                                  style={{ borderColor: tag.color || '#3b82f6' }}
-                                >
-                                  {tag.name}
-                                </Badge>
-                              ))}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-2 mb-2">
+                              <CardTitle className="line-clamp-1">
+                                {getLinkTitle(link)}
+                              </CardTitle>
+                              <a
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
                             </div>
-                          )}
+                            {link.og_site_name && (
+                              <CardDescription className="mb-2">
+                                {link.og_site_name}
+                              </CardDescription>
+                            )}
+                            {link.description && (
+                              <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                                {getLinkDescription(link)}
+                              </p>
+                            )}
+                            {link.expand?.tags && link.expand.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {link.expand.tags.map((tag) => (
+                                  <Badge
+                                    key={tag.id}
+                                    variant="outline"
+                                    style={{ borderColor: tag.color || '#3b82f6' }}
+                                  >
+                                    {tag.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
 
