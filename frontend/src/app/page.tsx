@@ -71,7 +71,8 @@ function HomeContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string>('');
+  // use "all" sentinel to avoid empty-string Select value issues
+  const [selectedTag, setSelectedTag] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -95,21 +96,34 @@ function HomeContent() {
         perPage: '12',
       });
       if (search) params.append('search', search);
-      if (selectedTag) params.append('tagId', selectedTag);
+      if (selectedTag && selectedTag !== 'all') params.append('tagId', selectedTag);
 
       const response = await fetch(`/api/links?${params}`, {
         credentials: 'include',
       });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to fetch links');
+      }
+
       const data: LinksResponse = await response.json();
-      setLinks(data.items);
+      setLinks(data.items || []);
       setPagination({
-        page: data.page,
-        perPage: data.perPage,
-        totalItems: data.totalItems,
-        totalPages: data.totalPages,
+        page: data.page || 1,
+        perPage: data.perPage || 12,
+        totalItems: data.totalItems || 0,
+        totalPages: data.totalPages || 0,
       });
     } catch (error) {
       console.error('Failed to fetch links:', error);
+      setLinks([]);
+      setPagination({
+        page: 1,
+        perPage: 12,
+        totalItems: 0,
+        totalPages: 0,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -227,7 +241,7 @@ function HomeContent() {
                 <SelectValue placeholder="Filter by tag" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All tags</SelectItem>
+                <SelectItem value="all">All tags</SelectItem>
                 {tags.map((tag) => (
                   <SelectItem key={tag.id} value={tag.id}>
                     {tag.name}
