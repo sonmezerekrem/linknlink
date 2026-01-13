@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   keywords: ["bookmarks", "links", "organization", "productivity", "link management"],
   authors: [{ name: "LinknLink" }],
   creator: "LinknLink",
+  applicationName: "LinknLink",
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -25,15 +26,28 @@ export const metadata: Metadata = {
     title: "LinknLink - Your Link Management App",
     description: "Save, organize, and manage all your important bookmarks in one place.",
     siteName: "LinknLink",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "LinknLink - Your Link Management App",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "LinknLink - Your Link Management App",
     description: "Save, organize, and manage all your important bookmarks in one place.",
+    images: ["/opengraph-image"],
   },
   robots: {
     index: true,
     follow: true,
+  },
+  icons: {
+    icon: "/icon",
+    apple: "/apple-icon",
   },
 };
 
