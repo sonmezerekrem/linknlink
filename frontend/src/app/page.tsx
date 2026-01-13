@@ -317,7 +317,7 @@ function HomeContent() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
-      <Header userEmail={user?.email} onLogout={handleLogout} />
+      <Header user={user} onLogout={handleLogout} />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

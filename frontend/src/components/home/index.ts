@@ -9,3 +9,5 @@ export { ManageTagsDialog } from './ManageTagsDialog';
 export { SearchAndFilters } from './SearchAndFilters';
 export { LinksPagination } from './LinksPagination';
 export { ViewModeToggle } from './ViewModeToggle';
+export { UserDropdown } from './UserDropdown';
+export { UserProfileDialog } from './UserProfileDialog';
