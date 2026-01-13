@@ -41,7 +41,7 @@ export function LinkCard({ link, onToggleTag, onEdit, onDelete }: LinkCardProps)
             />
           </div>
         ) : (
-          <div className="h-40 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+          <div className="h-48 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
         )}
       </a>
       <CardHeader>

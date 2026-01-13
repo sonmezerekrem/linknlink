@@ -20,6 +20,16 @@ import {
   type LinksResponse,
   type PaginationState,
 } from '@/components/home';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 function HomeContent() {
   const { user, logout } = useAuth();
@@ -42,6 +52,21 @@ function HomeContent() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [isEditLinkDialogOpen, setIsEditLinkDialogOpen] = useState(false);
+
+  // Alert dialog states
+  const [alertDialog, setAlertDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({ open: false, title: '', message: '' });
+
+  // Confirmation dialog states
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   // Edit states
   const [editingLink, setEditingLink] = useState<Link | null>(null);
@@ -143,13 +168,21 @@ function HomeContent() {
       setNewLink({ url: '', tags: [] });
       fetchLinks();
     } catch (error: any) {
-      alert(error.message || 'Failed to create link');
+      setAlertDialog({
+        open: true,
+        title: 'Error',
+        message: error.message || 'Failed to create link',
+      });
     }
   };
 
   const handleCreateTag = async () => {
     if (!newTag.name.trim()) {
-      alert('Tag name is required');
+      setAlertDialog({
+        open: true,
+        title: 'Validation Error',
+        message: 'Tag name is required',
+      });
       return;
     }
     try {
@@ -170,14 +203,22 @@ function HomeContent() {
       setNewTag({ name: '', color: '#3b82f6' });
       await fetchTags();
     } catch (error: any) {
-      alert(error.message || 'Failed to create tag');
+      setAlertDialog({
+        open: true,
+        title: 'Error',
+        message: error.message || 'Failed to create tag',
+      });
     }
   };
 
   const handleUpdateTag = async () => {
     if (!editingTag) return;
     if (!newTag.name.trim()) {
-      alert('Tag name is required');
+      setAlertDialog({
+        open: true,
+        title: 'Validation Error',
+        message: 'Tag name is required',
+      });
       return;
     }
     try {
@@ -200,30 +241,44 @@ function HomeContent() {
       await fetchTags();
       await fetchLinks();
     } catch (error: any) {
-      alert(error.message || 'Failed to update tag');
+      setAlertDialog({
+        open: true,
+        title: 'Error',
+        message: error.message || 'Failed to update tag',
+      });
     }
   };
 
   const handleDeleteTag = async (tagId: string) => {
-    if (!confirm('Are you sure you want to delete this tag? It will be removed from all links.')) {
-      return;
-    }
-    try {
-      const response = await fetch(`/api/tags/${tagId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Tag',
+      message: 'Are you sure you want to delete this tag? It will be removed from all links.',
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/tags/${tagId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete tag');
-      }
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to delete tag');
+          }
 
-      fetchTags();
-      fetchLinks();
-    } catch (error: any) {
-      alert(error.message || 'Failed to delete tag');
-    }
+          fetchTags();
+          fetchLinks();
+          setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
+        } catch (error: any) {
+          setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
+          setAlertDialog({
+            open: true,
+            title: 'Error',
+            message: error.message || 'Failed to delete tag',
+          });
+        }
+      },
+    });
   };
 
   const handleUpdateLinkTags = async (linkId: string | undefined, newTags: string[]) => {
@@ -248,7 +303,11 @@ function HomeContent() {
 
       fetchLinks();
     } catch (error: any) {
-      alert(error.message || 'Failed to update link');
+      setAlertDialog({
+        open: true,
+        title: 'Error',
+        message: error.message || 'Failed to update link',
+      });
     }
   };
 
@@ -263,35 +322,52 @@ function HomeContent() {
 
   const handleDeleteLink = async (link: Link) => {
     if (!link.id) {
-      alert('Link id is missing. Please reload and try again.');
-      return;
-    }
-
-    if (!confirm('Are you sure you want to delete this link?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/links/${link.id}`, {
-        method: 'DELETE',
-        credentials: 'include',
+      setAlertDialog({
+        open: true,
+        title: 'Error',
+        message: 'Link id is missing. Please reload and try again.',
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete link');
-      }
-
-      fetchLinks();
-    } catch (error: any) {
-      alert(error.message || 'Failed to delete link');
+      return;
     }
+
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Link',
+      message: 'Are you sure you want to delete this link?',
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/links/${link.id}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to delete link');
+          }
+
+          fetchLinks();
+          setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
+        } catch (error: any) {
+          setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
+          setAlertDialog({
+            open: true,
+            title: 'Error',
+            message: error.message || 'Failed to delete link',
+          });
+        }
+      },
+    });
   };
 
   const handleSaveLinkEdit = async () => {
     if (!editingLink) return;
     if (!editingLink.id) {
-      alert('Link id is missing. Please reload and try again.');
+      setAlertDialog({
+        open: true,
+        title: 'Error',
+        message: 'Link id is missing. Please reload and try again.',
+      });
       return;
     }
     try {
@@ -317,7 +393,11 @@ function HomeContent() {
       setEditingLink(null);
       fetchLinks();
     } catch (error: any) {
-      alert(error.message || 'Failed to update link');
+      setAlertDialog({
+        open: true,
+        title: 'Error',
+        message: error.message || 'Failed to update link',
+      });
     }
   };
 
@@ -439,6 +519,43 @@ function HomeContent() {
             />
           </>
         )}
+
+        {/* Alert Dialog */}
+        <AlertDialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{alertDialog.title}</AlertDialogTitle>
+              <AlertDialogDescription>{alertDialog.message}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setAlertDialog({ open: false, title: '', message: '' })}>
+                OK
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmation Dialog */}
+        <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+              <AlertDialogDescription>{confirmDialog.message}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} })}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                }}
+              >
+                Confirm
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );
