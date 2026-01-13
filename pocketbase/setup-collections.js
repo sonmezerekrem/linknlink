@@ -47,6 +47,7 @@ async function setupCollections() {
                         required: true,
                         min: 1,
                         max: 100
+
                     },
                     {
                         name: 'color',
@@ -54,26 +55,21 @@ async function setupCollections() {
                         required: false,
                         min: 0,
                         max: 50
+
                     },
                     {
                         name: 'user',
                         type: 'relation',
                         required: true,
-                        options: {
-                            collectionId: usersCollectionId,
-                            cascadeDelete: true,
-                            minSelect: null,
-                            maxSelect: 1,
-                            displayFields: ['email'],
-                        },
+                        collectionId: usersCollectionId,
+                        cascadeDelete: true,
+                        maxSelect: 1,
+                        minSelect: 0,
+                        displayFields: ['email'],
                     },
                 ],
                 indexes: [
-                    {
-                        name: 'idx_user_name',
-                        columns: ['user', 'name'],
-                        unique: true,
-                    },
+                    "CREATE INDEX `idx_SeddfTuzIt` ON `tags` (\n  `user`,\n  `name`\n)"
                 ],
             });
             tagsCollectionId = tagsCollection.id;
@@ -103,81 +99,58 @@ async function setupCollections() {
                         name: 'url',
                         type: 'url',
                         required: true,
-                        options: {},
                     },
                     {
                         name: 'title',
                         type: 'text',
                         required: false,
-                        options: {
-                            min: 0,
-                            max: 500,
-                        },
+                        min: 0,
+                        max: 1000,
                     },
                     {
                         name: 'description',
                         type: 'text',
                         required: false,
-                        options: {
-                            min: 0,
-                            max: 2000,
-                        },
+                        min: 0,
+                        max: 5000,
                     },
                     {
                         name: 'notes',
                         type: 'text',
                         required: false,
-                        options: {
-                            min: 0,
-                            max: 5000,
-                        },
+                        min: 0,
+                        max: 5000,
                     },
                     {
                         name: 'tags',
                         type: 'relation',
                         required: false,
-                        options: {
-                            collectionId: tagsCollectionId,
-                            cascadeDelete: false,
-                            minSelect: null,
-                            maxSelect: null,
-                            displayFields: ['name', 'color'],
-                        },
+                        collectionId: tagsCollectionId,
+                        cascadeDelete: false,
+                        displayFields: ['name', 'color'],
                     },
                     {
                         name: 'user',
                         type: 'relation',
                         required: true,
-                        options: {
-                            collectionId: usersCollectionId,
-                            cascadeDelete: true,
-                            minSelect: null,
-                            maxSelect: 1,
-                            displayFields: ['email'],
-                        },
+                        collectionId: usersCollectionId,
+                        cascadeDelete: true,
+                        maxSelect: 1,
+                        displayFields: ['email'],
                     },
                     {
                         name: 'is_favorite',
                         type: 'bool',
                         required: false,
-                        options: {},
                     },
                     {
                         name: 'archived',
                         type: 'bool',
                         required: false,
-                        options: {},
                     },
                 ],
                 indexes: [
-                    {
-                        name: 'idx_user_created',
-                        columns: ['user', '-created'],
-                    },
-                    {
-                        name: 'idx_user_url',
-                        columns: ['user', 'url'],
-                    },
+                    "CREATE INDEX `idx_user_url` ON `links` (\n  `user`,\n  `url`\n)",
                 ],
             });
             console.log('✓ Links collection created');
