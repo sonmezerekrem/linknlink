@@ -69,6 +69,15 @@ func init() {
 		if err != nil {
 			linksCollection = core.NewBaseCollection("links")
 			linksCollection.Fields.Add(
+				&core.AutodateField{
+					Name:     "created",
+					OnCreate: true,
+				},
+				&core.AutodateField{
+					Name:     "updated",
+					OnCreate: true,
+					OnUpdate: true,
+				},
 				&core.URLField{
 					Name:     "url",
 					Required: true,
