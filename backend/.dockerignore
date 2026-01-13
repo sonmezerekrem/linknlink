@@ -1,0 +1,6 @@
+pb_data/
+.git/
+.gitignore
+*.md
+.env
+.env.local
