@@ -3,7 +3,13 @@
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, Edit2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ExternalLink, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import type { Link } from './types';
 import { getLinkTitle, getLinkDescription, getLinkImage } from './utils';
 
@@ -11,9 +17,10 @@ type LinkListItemProps = {
   link: Link;
   onToggleTag: (linkId: string | undefined, tagId: string) => void;
   onEdit: (link: Link) => void;
+  onDelete: (link: Link) => void;
 };
 
-export function LinkListItem({ link, onToggleTag, onEdit }: LinkListItemProps) {
+export function LinkListItem({ link, onToggleTag, onEdit, onDelete }: LinkListItemProps) {
   const imageUrl = getLinkImage(link);
 
   return (
@@ -82,14 +89,31 @@ export function LinkListItem({ link, onToggleTag, onEdit }: LinkListItemProps) {
               ))}
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onEdit(link)}
-            className="flex-shrink-0"
-          >
-            <Edit2 className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(link)}>
+                <Edit2 className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => onDelete(link)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardContent>
     </Card>

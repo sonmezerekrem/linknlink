@@ -261,6 +261,33 @@ function HomeContent() {
     setIsEditLinkDialogOpen(true);
   };
 
+  const handleDeleteLink = async (link: Link) => {
+    if (!link.id) {
+      alert('Link id is missing. Please reload and try again.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this link?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/links/${link.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete link');
+      }
+
+      fetchLinks();
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete link');
+    }
+  };
+
   const handleSaveLinkEdit = async () => {
     if (!editingLink) return;
     if (!editingLink.id) {
@@ -378,6 +405,7 @@ function HomeContent() {
                     link={link}
                     onToggleTag={toggleLinkTag}
                     onEdit={handleEditLink}
+                    onDelete={handleDeleteLink}
                   />
                 ))}
               </div>
@@ -389,6 +417,7 @@ function HomeContent() {
                     link={link}
                     onToggleTag={toggleLinkTag}
                     onEdit={handleEditLink}
+                    onDelete={handleDeleteLink}
                   />
                 ))}
               </div>
