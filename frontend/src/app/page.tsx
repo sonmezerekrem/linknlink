@@ -382,7 +382,7 @@ function HomeContent() {
                 ))}
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {links.map((link) => (
                   <LinkListItem
                     key={link.id}

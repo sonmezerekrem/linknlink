@@ -18,28 +18,42 @@ export function LinkCard({ link, onToggleTag, onEdit }: LinkCardProps) {
 
   return (
     <Card className="hover:shadow-lg transition-shadow overflow-hidden pt-0">
-      {imageUrl ? (
-        <div className="h-48 w-full overflow-hidden bg-muted">
-          <img
-            src={imageUrl}
-            alt={getLinkTitle(link)}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        </div>
-      ) : (
-        <div className="h-40 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-      )}
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block"
+      >
+        {imageUrl ? (
+          <div className="h-48 w-full overflow-hidden bg-muted">
+            <img
+              src={imageUrl}
+              alt={getLinkTitle(link)}
+              className="h-full w-full object-cover hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+            />
+          </div>
+        ) : (
+          <div className="h-40 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+        )}
+      </a>
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="line-clamp-2">
-            {getLinkTitle(link)}
-          </CardTitle>
           <a
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-foreground"
+            className="hover:underline"
+          >
+            <CardTitle className="line-clamp-2">
+              {getLinkTitle(link)}
+            </CardTitle>
+          </a>
+          <a
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-foreground flex-shrink-0"
           >
             <ExternalLink className="h-4 w-4" />
           </a>
@@ -61,8 +75,6 @@ export function LinkCard({ link, onToggleTag, onEdit }: LinkCardProps) {
                 <Badge
                   key={tag.id}
                   style={{ backgroundColor: tag.color || '#3b82f6', color: 'white' }}
-                  className="cursor-pointer hover:opacity-80"
-                  onClick={() => onToggleTag(link.id, tag.id)}
                 >
                   {tag.name}
                 </Badge>
