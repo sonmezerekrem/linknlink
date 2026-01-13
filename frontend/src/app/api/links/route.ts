@@ -130,6 +130,7 @@ export async function GET(request: NextRequest) {
     const result = await pb.collection('links').getList(page, perPage, {
       filter,
       expand: 'tags',
+      sort: '-created',
     });
 
     return NextResponse.json({
