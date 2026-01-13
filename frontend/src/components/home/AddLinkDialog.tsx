@@ -11,10 +11,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Plus } from 'lucide-react';
+import { Plus, Check } from 'lucide-react';
 import type { Tag } from './types';
+import { cn } from '@/lib/utils';
 
 type AddLinkDialogProps = {
   isOpen: boolean;
@@ -33,6 +34,20 @@ export function AddLinkDialog({
   onNewLinkChange,
   onSubmit,
 }: AddLinkDialogProps) {
+  const toggleTag = (tagId: string) => {
+    if (newLink.tags.includes(tagId)) {
+      onNewLinkChange({
+        ...newLink,
+        tags: newLink.tags.filter((t) => t !== tagId),
+      });
+    } else {
+      onNewLinkChange({
+        ...newLink,
+        tags: [...newLink.tags, tagId],
+      });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
@@ -63,45 +78,36 @@ export function AddLinkDialog({
           </div>
           <div className="space-y-2">
             <Label>Tags</Label>
-            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
-              {tags.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No tags available. Create tags in &quot;Manage Tags&quot; first.
-                </p>
-              ) : (
-                tags.map((tag) => (
-                  <div key={tag.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`tag-${tag.id}`}
-                      checked={newLink.tags.includes(tag.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          onNewLinkChange({
-                            ...newLink,
-                            tags: [...newLink.tags, tag.id],
-                          });
-                        } else {
-                          onNewLinkChange({
-                            ...newLink,
-                            tags: newLink.tags.filter((t) => t !== tag.id),
-                          });
-                        }
+            {tags.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No tags available. Create tags in &quot;Tags&quot; first.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => {
+                  const isSelected = newLink.tags.includes(tag.id);
+                  return (
+                    <Badge
+                      key={tag.id}
+                      style={{
+                        backgroundColor: isSelected ? tag.color || '#3b82f6' : 'transparent',
+                        color: isSelected ? 'white' : tag.color || '#3b82f6',
+                        borderColor: tag.color || '#3b82f6',
                       }}
-                    />
-                    <Label
-                      htmlFor={`tag-${tag.id}`}
-                      className="flex items-center gap-2 cursor-pointer"
+                      variant="outline"
+                      className={cn(
+                        'cursor-pointer transition-all',
+                        isSelected ? 'pr-1' : 'hover:opacity-80'
+                      )}
+                      onClick={() => toggleTag(tag.id)}
                     >
-                      <div
-                        className="w-3 h-3 rounded"
-                        style={{ backgroundColor: tag.color || '#3b82f6' }}
-                      />
                       {tag.name}
-                    </Label>
-                  </div>
-                ))
-              )}
-            </div>
+                      {isSelected && <Check className="ml-1 h-3 w-3" />}
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter>

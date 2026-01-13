@@ -10,9 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Check } from 'lucide-react';
 import type { Link, Tag } from './types';
+import { cn } from '@/lib/utils';
 
 type EditLinkDialogProps = {
   isOpen: boolean;
@@ -31,6 +33,22 @@ export function EditLinkDialog({
   onEditingLinkChange,
   onSubmit,
 }: EditLinkDialogProps) {
+  const toggleTag = (tagId: string) => {
+    if (!editingLink) return;
+    const currentTags = editingLink.tags || [];
+    if (currentTags.includes(tagId)) {
+      onEditingLinkChange({
+        ...editingLink,
+        tags: currentTags.filter((t) => t !== tagId),
+      });
+    } else {
+      onEditingLinkChange({
+        ...editingLink,
+        tags: [...currentTags, tagId],
+      });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -64,46 +82,36 @@ export function EditLinkDialog({
             </div>
             <div className="space-y-2">
               <Label>Tags</Label>
-              <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
-                {tags.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No tags available. Create tags in &quot;Manage Tags&quot; first.
-                  </p>
-                ) : (
-                  tags.map((tag) => (
-                    <div key={tag.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`edit-tag-${tag.id}`}
-                        checked={(editingLink.tags || []).includes(tag.id)}
-                        onCheckedChange={(checked) => {
-                          const currentTags = editingLink.tags || [];
-                          if (checked) {
-                            onEditingLinkChange({
-                              ...editingLink,
-                              tags: [...currentTags, tag.id],
-                            });
-                          } else {
-                            onEditingLinkChange({
-                              ...editingLink,
-                              tags: currentTags.filter((t) => t !== tag.id),
-                            });
-                          }
+              {tags.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No tags available. Create tags in &quot;Tags&quot; first.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => {
+                    const isSelected = (editingLink.tags || []).includes(tag.id);
+                    return (
+                      <Badge
+                        key={tag.id}
+                        style={{
+                          backgroundColor: isSelected ? tag.color || '#3b82f6' : 'transparent',
+                          color: isSelected ? 'white' : tag.color || '#3b82f6',
+                          borderColor: tag.color || '#3b82f6',
                         }}
-                      />
-                      <Label
-                        htmlFor={`edit-tag-${tag.id}`}
-                        className="flex items-center gap-2 cursor-pointer"
+                        variant="outline"
+                        className={cn(
+                          'cursor-pointer transition-all',
+                          isSelected ? 'pr-1' : 'hover:opacity-80'
+                        )}
+                        onClick={() => toggleTag(tag.id)}
                       >
-                        <div
-                          className="w-3 h-3 rounded"
-                          style={{ backgroundColor: tag.color || '#3b82f6' }}
-                        />
                         {tag.name}
-                      </Label>
-                    </div>
-                  ))
-                )}
-              </div>
+                        {isSelected && <Check className="ml-1 h-3 w-3" />}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -60,8 +60,7 @@ export function LinkCard({ link, onToggleTag, onEdit }: LinkCardProps) {
               {link.expand.tags.map((tag) => (
                 <Badge
                   key={tag.id}
-                  variant="outline"
-                  style={{ borderColor: tag.color || '#3b82f6' }}
+                  style={{ backgroundColor: tag.color || '#3b82f6', color: 'white' }}
                   className="cursor-pointer hover:opacity-80"
                   onClick={() => onToggleTag(link.id, tag.id)}
                 >
