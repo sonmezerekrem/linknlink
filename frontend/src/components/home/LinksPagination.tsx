@@ -62,9 +62,9 @@ export function LinksPagination({
   };
 
   return (
-    <div className="mt-8">
+    <div className="mt-12 flex justify-center">
       <Pagination>
-        <PaginationContent>
+        <PaginationContent className="gap-1">
           <PaginationItem>
             <PaginationPrevious
               href="#"

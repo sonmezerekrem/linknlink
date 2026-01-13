@@ -463,22 +463,24 @@ function HomeContent() {
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-20">
             <div className="text-lg text-muted-foreground">Loading...</div>
           </div>
         ) : links.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-lg text-muted-foreground">No links found</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              {search || selectedTag !== 'all'
-                ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first link'}
-            </p>
+          <div className="flex flex-col items-center justify-center py-20 px-4">
+            <div className="text-center max-w-md">
+              <p className="text-lg font-semibold mb-2">No links found</p>
+              <p className="text-sm text-muted-foreground">
+                {search || selectedTag !== 'all'
+                  ? 'Try adjusting your search or filters to find what you\'re looking for.'
+                  : 'Get started by adding your first link using the "Add Link" button above.'}
+              </p>
+            </div>
           </div>
         ) : (
           <>
             {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {links.map((link) => (
                   <LinkCard
                     key={link.id}
@@ -490,7 +492,7 @@ function HomeContent() {
                 ))}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {links.map((link) => (
                   <LinkListItem
                     key={link.id}

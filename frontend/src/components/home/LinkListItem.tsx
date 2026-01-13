@@ -24,24 +24,24 @@ export function LinkListItem({ link, onToggleTag, onEdit, onDelete }: LinkListIt
   const imageUrl = getLinkImage(link);
 
   return (
-    <Card className="hover:shadow-md transition-shadow py-0">
+    <Card className="group hover:shadow-lg transition-all duration-300 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
       <CardContent className="p-4">
         <div className="flex items-center gap-4">
           <a
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="h-16 w-24 flex-shrink-0 overflow-hidden rounded-md bg-muted block"
+            className="h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800 block"
           >
             {imageUrl ? (
               <img
                 src={imageUrl}
                 alt={getLinkTitle(link)}
-                className="h-full w-full object-cover hover:scale-105 transition-transform duration-300"
+                className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
               />
             ) : (
-              <div className="h-full w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+              <div className="h-full w-full bg-gradient-to-br from-primary/20 via-purple-500/20 to-pink-500/20" />
             )}
           </a>
           <div className="flex-1 min-w-0">
@@ -50,9 +50,9 @@ export function LinkListItem({ link, onToggleTag, onEdit, onDelete }: LinkListIt
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:underline"
+                className="group-hover:text-primary transition-colors"
               >
-                <CardTitle className="text-base line-clamp-1">
+                <CardTitle className="text-base line-clamp-1 font-semibold tracking-tight">
                   {getLinkTitle(link)}
                 </CardTitle>
               </a>
@@ -60,7 +60,7 @@ export function LinkListItem({ link, onToggleTag, onEdit, onDelete }: LinkListIt
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
               >
                 <ExternalLink className="h-4 w-4" />
               </a>
@@ -82,7 +82,7 @@ export function LinkListItem({ link, onToggleTag, onEdit, onDelete }: LinkListIt
                 <Badge
                   key={tag.id}
                   style={{ backgroundColor: tag.color || '#3b82f6', color: 'white' }}
-                  className="text-xs"
+                  className="text-xs px-2 py-0.5"
                 >
                   {tag.name}
                 </Badge>
@@ -94,7 +94,7 @@ export function LinkListItem({ link, onToggleTag, onEdit, onDelete }: LinkListIt
               <Button
                 variant="ghost"
                 size="icon"
-                className="flex-shrink-0"
+                className="flex-shrink-0 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />

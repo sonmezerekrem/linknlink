@@ -32,11 +32,11 @@ export function SearchAndFilters({
           placeholder="Search links..."
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full"
+          className="w-full h-11"
         />
       </div>
       <Select value={selectedTag} onValueChange={onTagFilterChange}>
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger className="w-[180px] h-11">
           <SelectValue placeholder="Filter by tag" />
         </SelectTrigger>
         <SelectContent>

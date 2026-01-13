@@ -76,7 +76,7 @@ export function ManageTagsDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" className="h-11">
           <TagIcon className="mr-2 h-4 w-4" />
           Tags
         </Button>
@@ -94,6 +94,7 @@ export function ManageTagsDialog({
               placeholder="Tag name"
               value={currentName}
               onChange={(e) => handleNameChange(e.target.value)}
+              className="h-11"
             />
             <div className="flex flex-wrap gap-2">
               {TAG_COLORS.map((color) => (

@@ -68,6 +68,7 @@ export function EditLinkDialog({
                 onChange={(e) =>
                   onEditingLinkChange({ ...editingLink, title: e.target.value })
                 }
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
@@ -78,6 +79,7 @@ export function EditLinkDialog({
                 onChange={(e) =>
                   onEditingLinkChange({ ...editingLink, description: e.target.value })
                 }
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
