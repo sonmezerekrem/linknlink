@@ -35,7 +35,14 @@ export const getLinks = cache(async (params: {
 }): Promise<LinksResponse> => {
   const user = await getAuthenticatedUser();
   if (!user) {
-    throw new Error('Unauthorized');
+    // Return empty response instead of throwing
+    return {
+      items: [],
+      page: 1,
+      perPage: 12,
+      totalItems: 0,
+      totalPages: 0,
+    };
   }
 
   const pb = getServerPocketBase();
@@ -43,7 +50,13 @@ export const getLinks = cache(async (params: {
   const authCookie = cookieStore.get('pb_auth');
 
   if (!authCookie) {
-    throw new Error('Unauthorized');
+    return {
+      items: [],
+      page: 1,
+      perPage: 12,
+      totalItems: 0,
+      totalPages: 0,
+    };
   }
 
   const authData = JSON.parse(authCookie.value);
@@ -91,7 +104,8 @@ export const getLinks = cache(async (params: {
 export const getTags = cache(async (): Promise<Tag[]> => {
   const user = await getAuthenticatedUser();
   if (!user) {
-    throw new Error('Unauthorized');
+    // Return empty array instead of throwing
+    return [];
   }
 
   const pb = getServerPocketBase();
@@ -99,7 +113,7 @@ export const getTags = cache(async (): Promise<Tag[]> => {
   const authCookie = cookieStore.get('pb_auth');
 
   if (!authCookie) {
-    throw new Error('Unauthorized');
+    return [];
   }
 
   const authData = JSON.parse(authCookie.value);

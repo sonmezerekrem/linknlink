@@ -17,8 +17,20 @@ interface HomePageProps {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
 
-  // Parallel data fetching - both requests run simultaneously
-  const [linksData, tags, user] = await Promise.all([
+  // Check if user is authenticated first
+  const user = await getCurrentUser();
+
+  // If not authenticated, let ProtectedRoute handle the redirect
+  if (!user) {
+    return (
+      <ProtectedRoute>
+        <div />
+      </ProtectedRoute>
+    );
+  }
+
+  // Parallel data fetching - only when authenticated
+  const [linksData, tags] = await Promise.all([
     getLinks({
       page: params.page ? parseInt(params.page, 10) : 1,
       perPage: 12,
@@ -26,7 +38,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       tagId: params.tagId !== 'all' ? params.tagId : undefined,
     }),
     getTags(),
-    getCurrentUser(),
   ]);
 
   return (
