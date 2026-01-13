@@ -1,202 +1,211 @@
-// setup-collections.js
 import PocketBase from 'pocketbase';
 import dotenv from 'dotenv';
-
 dotenv.config();
 
-const pb = new PocketBase(process.env.POCKETBASE_URL);
+// Get configuration from environment variables or use defaults
+const POCKETBASE_URL = process.env.POCKETBASE_URL || 'http://localhost:8090';
+const ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD || 'admin123456789';
 
-// Login as superuser
-await pb.admins.authWithPassword(process.env.POCKETBASE_ADMIN_EMAIL, process.env.POCKETBASE_ADMIN_PASSWORD);
+const pb = new PocketBase(POCKETBASE_URL);
 
-// Helper function to get or create collection
-async function getOrCreateCollection(name, schema) {
-    try {
-        // Try to get existing collection
-        const collections = await pb.collections.getFullList({ filter: `name = "${name}"` });
-        if (collections.length > 0) {
-            console.log(`Collection "${name}" already exists, updating...`);
-            // Delete existing collection to recreate with correct schema
-            await pb.collections.delete(collections[0].id);
-        }
-    } catch (error) {
-        // Collection doesn't exist, which is fine
-    }
+async function setupCollections() {
+  try {
+    console.log(`Connecting to PocketBase at ${POCKETBASE_URL}...`);
     
-    // Create collection without rules first
-    return await pb.collections.create({
-        name,
-        type: 'base',
-        schema
-    });
-}
+    // Authenticate as admin
+    console.log('Authenticating as admin...');
+    await pb.admins.authWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
+    console.log('✓ Authenticated successfully');
 
-// Define tags schema
-const tagsSchema = [
-    {
-        name: 'name',
-        type: 'text',
-        required: true,
-        options: { max: 100 }
-    },
-    {
-        name: 'color',
-        type: 'text',
-        options: { max: 7 }
-    },
-    {
-        name: 'user',
-        type: 'relation',
-        required: true,
-        options: {
-            collectionId: '_pb_users_auth_',
-            maxSelect: 1
-        }
+    // Get users collection ID
+    const existingCollections = await pb.collections.getFullList();
+    const usersCollection = existingCollections.find(c => c.name === 'users');
+    if (!usersCollection) {
+      throw new Error('Users collection not found. Make sure PocketBase is properly initialized.');
     }
-];
+    const usersCollectionId = usersCollection.id;
+    console.log(`✓ Found users collection: ${usersCollectionId}`);
 
-// Create tags collection (without rules first)
-let tagsCollection = await getOrCreateCollection('tags', tagsSchema);
+    const collectionNames = existingCollections.map(c => c.name);
 
-// Wait a bit to ensure collection is fully initialized
-await new Promise(resolve => setTimeout(resolve, 1000));
-
-// Fetch the collection to get the schema with field IDs
-const fullTagsCollection = await pb.collections.getOne(tagsCollection.id);
-
-// Use the fetched schema (which has field IDs) or fall back to original
-const tagsSchemaWithIds = fullTagsCollection.schema || tagsSchema;
-
-console.log('Updating tags collection with rules...');
-
-// Now update with schema and rules together
-try {
-    await pb.collections.update(tagsCollection.id, {
-        schema: tagsSchemaWithIds,
-        listRule: '@request.auth.id != "" && user = @request.auth.id',
-        viewRule: '@request.auth.id != "" && user = @request.auth.id',
-        createRule: '@request.auth.id != ""',
-        updateRule: '@request.auth.id != "" && user = @request.auth.id',
-        deleteRule: '@request.auth.id != "" && user = @request.auth.id'
-    });
-    
-    console.log('Rules updated successfully, adding indexes...');
-    
-    // Add indexes separately
-    await pb.collections.update(tagsCollection.id, {
-        indexes: [
-            'CREATE UNIQUE INDEX idx_unique_tag_per_user ON tags (name, user)'
-        ]
-    });
-} catch (error) {
-    console.error('Error updating tags collection rules:', error);
-    // Log the full error details
-    if (error.response?.data) {
-        console.error('Error details:', JSON.stringify(error.response.data, null, 2));
-    }
-    throw error;
-}
-
-console.log('Created/updated tags collection:', tagsCollection.id);
-
-// Define links schema
-const linksSchema = [
-    {
-        name: 'url',
-        type: 'url',
-        required: true
-    },
-    {
-        name: 'title',
-        type: 'text',
-        options: { max: 500 }
-    },
-    {
-        name: 'description',
-        type: 'text',
-        options: { max: 2000 }
-    },
-    {
-        name: 'og_image',
-        type: 'url'
-    },
-    {
-        name: 'og_site_name',
-        type: 'text',
-        options: { max: 200 }
-    },
-    {
-        name: 'og_type',
-        type: 'text',
-        options: { max: 100 }
-    },
-    {
-        name: 'favicon',
-        type: 'url'
-    },
-    {
-        name: 'notes',
-        type: 'editor'
-    },
-    {
+    // Create Tags collection
+    let tagsCollectionId;
+    if (collectionNames.includes('tags')) {
+      console.log('⚠ Tags collection already exists, skipping...');
+      const tagsCollection = existingCollections.find(c => c.name === 'tags');
+      tagsCollectionId = tagsCollection.id;
+    } else {
+      console.log('Creating tags collection...');
+      const tagsCollection = await pb.collections.create({
         name: 'tags',
-        type: 'relation',
-        options: {
-            collectionId: tagsCollection.id,
-            maxSelect: null
-        }
-    },
-    {
-        name: 'user',
-        type: 'relation',
-        required: true,
-        options: {
-            collectionId: '_pb_users_auth_',
-            maxSelect: 1
-        }
-    },
-    {
-        name: 'is_favorite',
-        type: 'bool'
-    },
-    {
-        name: 'archived',
-        type: 'bool'
+        type: 'base',
+        schema: [
+          {
+            name: 'name',
+            type: 'text',
+            required: true,
+            options: {
+              min: 1,
+              max: 100,
+            },
+          },
+          {
+            name: 'color',
+            type: 'text',
+            required: false,
+            options: {
+              min: 0,
+              max: 50,
+            },
+          },
+          {
+            name: 'user',
+            type: 'relation',
+            required: true,
+            options: {
+              collectionId: usersCollectionId,
+              cascadeDelete: true,
+              minSelect: null,
+              maxSelect: 1,
+              displayFields: ['email'],
+            },
+          },
+        ],
+        indexes: [
+          {
+            name: 'idx_user_name',
+            columns: ['user', 'name'],
+            unique: true,
+          },
+        ],
+      });
+      tagsCollectionId = tagsCollection.id;
+      console.log('✓ Tags collection created');
+
+      // Set collection rules
+      await pb.collections.update('tags', {
+        listRule: 'user = @request.auth.id',
+        viewRule: 'user = @request.auth.id',
+        createRule: 'user = @request.auth.id',
+        updateRule: 'user = @request.auth.id',
+        deleteRule: 'user = @request.auth.id',
+      });
+      console.log('✓ Tags collection rules set');
     }
-];
 
-// Create links collection (without rules first)
-let linksCollection = await getOrCreateCollection('links', linksSchema);
+    // Create Links collection
+    if (collectionNames.includes('links')) {
+      console.log('⚠ Links collection already exists, skipping...');
+    } else {
+      console.log('Creating links collection...');
+      const linksCollection = await pb.collections.create({
+        name: 'links',
+        type: 'base',
+        schema: [
+          {
+            name: 'url',
+            type: 'url',
+            required: true,
+            options: {},
+          },
+          {
+            name: 'title',
+            type: 'text',
+            required: false,
+            options: {
+              min: 0,
+              max: 500,
+            },
+          },
+          {
+            name: 'description',
+            type: 'text',
+            required: false,
+            options: {
+              min: 0,
+              max: 2000,
+            },
+          },
+          {
+            name: 'notes',
+            type: 'text',
+            required: false,
+            options: {
+              min: 0,
+              max: 5000,
+            },
+          },
+          {
+            name: 'tags',
+            type: 'relation',
+            required: false,
+            options: {
+              collectionId: tagsCollectionId,
+              cascadeDelete: false,
+              minSelect: null,
+              maxSelect: null,
+              displayFields: ['name', 'color'],
+            },
+          },
+          {
+            name: 'user',
+            type: 'relation',
+            required: true,
+            options: {
+              collectionId: usersCollectionId,
+              cascadeDelete: true,
+              minSelect: null,
+              maxSelect: 1,
+              displayFields: ['email'],
+            },
+          },
+          {
+            name: 'is_favorite',
+            type: 'bool',
+            required: false,
+            options: {},
+          },
+          {
+            name: 'archived',
+            type: 'bool',
+            required: false,
+            options: {},
+          },
+        ],
+        indexes: [
+          {
+            name: 'idx_user_created',
+            columns: ['user', '-created'],
+          },
+          {
+            name: 'idx_user_url',
+            columns: ['user', 'url'],
+          },
+        ],
+      });
+      console.log('✓ Links collection created');
 
-// Wait a bit to ensure collection is fully initialized
-await new Promise(resolve => setTimeout(resolve, 1000));
-
-// Fetch the collection to get the schema with field IDs
-const fullLinksCollection = await pb.collections.getOne(linksCollection.id);
-
-// Use the fetched schema (which has field IDs) or fall back to original
-const linksSchemaWithIds = fullLinksCollection.schema || linksSchema;
-
-console.log('Updating links collection with rules...');
-
-// Now update with schema and rules together
-try {
-    await pb.collections.update(linksCollection.id, {
-        schema: linksSchemaWithIds,
-        listRule: '@request.auth.id != "" && user = @request.auth.id',
-        viewRule: '@request.auth.id != "" && user = @request.auth.id',
-        createRule: '@request.auth.id != ""',
-        updateRule: '@request.auth.id != "" && user = @request.auth.id',
-        deleteRule: '@request.auth.id != "" && user = @request.auth.id'
-    });
-} catch (error) {
-    console.error('Error updating links collection rules:', error);
-    // Log the full error details
-    if (error.response?.data) {
-        console.error('Error details:', JSON.stringify(error.response.data, null, 2));
+      // Set collection rules
+      await pb.collections.update('links', {
+        listRule: 'user = @request.auth.id',
+        viewRule: 'user = @request.auth.id',
+        createRule: 'user = @request.auth.id',
+        updateRule: 'user = @request.auth.id',
+        deleteRule: 'user = @request.auth.id',
+      });
+      console.log('✓ Links collection rules set');
     }
-    throw error;
+
+    console.log('\n✅ All collections setup completed successfully!');
+  } catch (error) {
+    console.error('❌ Error setting up collections:', error);
+    if (error.response) {
+      console.error('Response:', error.response);
+    }
+    process.exit(1);
+  }
 }
 
-console.log('Created/updated links collection:', linksCollection.id);
-console.log('Setup complete!');
+// Run the setup
+setupCollections();

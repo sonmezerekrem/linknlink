@@ -1,15 +1,12 @@
 {
-  "name": "linknlink-pocketbase",
+  "name": "pocketbase-setup",
   "version": "1.0.0",
-  "main": "index.js",
+  "type": "module",
+  "description": "Script to setup PocketBase collections for linknlink",
+  "main": "setup-collections.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "migrate": "node setup-collections.js"
+    "setup": "node setup-collections.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "dotenv": "^17.2.3",
     "pocketbase": "^0.26.5"
