@@ -34,7 +34,8 @@ ENV NODE_OPTIONS="--max-old-space-size=256 --enable-source-maps=false"
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy public folder
+# Create public directory and copy if exists
+RUN mkdir -p ./public
 COPY --from=builder /app/public ./public
 
 # Copy standalone build
