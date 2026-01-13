@@ -34,7 +34,8 @@ import {
   PaginationEllipsis,
 } from '@/components/ui/pagination';
 import { Label } from '@/components/ui/label';
-import { Grid, List, Plus, ExternalLink } from 'lucide-react';
+import { Grid, List, Plus, ExternalLink, Tag as TagIcon, X, Edit2, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { RecordModel } from 'pocketbase';
 
 type Link = RecordModel & {
@@ -81,6 +82,11 @@ function HomeContent() {
     totalPages: 0,
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const [isEditLinkDialogOpen, setIsEditLinkDialogOpen] = useState(false);
+  const [editingLink, setEditingLink] = useState<Link | null>(null);
+  const [editingTag, setEditingTag] = useState<Tag | null>(null);
+  const [newTag, setNewTag] = useState({ name: '', color: '#3b82f6' });
   const [newLink, setNewLink] = useState({
     url: '',
     tags: [] as string[],
@@ -181,6 +187,153 @@ function HomeContent() {
     }
   };
 
+  const handleCreateTag = async () => {
+    if (!newTag.name.trim()) {
+      alert('Tag name is required');
+      return;
+    }
+    try {
+      const response = await fetch('/api/tags', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(newTag),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create tag');
+      }
+
+      setNewTag({ name: '', color: '#3b82f6' });
+      await fetchTags();
+    } catch (error: any) {
+      alert(error.message || 'Failed to create tag');
+    }
+  };
+
+  const handleUpdateTag = async () => {
+    if (!editingTag) return;
+    if (!newTag.name.trim()) {
+      alert('Tag name is required');
+      return;
+    }
+    try {
+      const response = await fetch(`/api/tags/${editingTag.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(newTag),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update tag');
+      }
+
+      setEditingTag(null);
+      setNewTag({ name: '', color: '#3b82f6' });
+      await fetchTags();
+      await fetchLinks();
+    } catch (error: any) {
+      alert(error.message || 'Failed to update tag');
+    }
+  };
+
+  const handleDeleteTag = async (tagId: string) => {
+    if (!confirm('Are you sure you want to delete this tag? It will be removed from all links.')) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/tags/${tagId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete tag');
+      }
+
+      fetchTags();
+      fetchLinks();
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete tag');
+    }
+  };
+
+  const handleUpdateLinkTags = async (linkId: string, newTags: string[]) => {
+    try {
+      const response = await fetch(`/api/links/${linkId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ tags: newTags }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update link');
+      }
+
+      fetchLinks();
+    } catch (error: any) {
+      alert(error.message || 'Failed to update link');
+    }
+  };
+
+  const handleEditLink = (link: Link) => {
+    setEditingLink(link);
+    setIsEditLinkDialogOpen(true);
+  };
+
+  const handleSaveLinkEdit = async () => {
+    if (!editingLink) return;
+    try {
+      const response = await fetch(`/api/links/${editingLink.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          tags: editingLink.tags || [],
+          title: editingLink.title,
+          description: editingLink.description,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update link');
+      }
+
+      setIsEditLinkDialogOpen(false);
+      setEditingLink(null);
+      fetchLinks();
+    } catch (error: any) {
+      alert(error.message || 'Failed to update link');
+    }
+  };
+
+  const toggleLinkTag = (linkId: string, tagId: string) => {
+    const link = links.find((l) => l.id === linkId);
+    if (!link) return;
+
+    const currentTags = link.tags || [];
+    const newTags = currentTags.includes(tagId)
+      ? currentTags.filter((t) => t !== tagId)
+      : [...currentTags, tagId];
+
+    handleUpdateLinkTags(linkId, newTags);
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push('/login');
@@ -274,6 +427,114 @@ function HomeContent() {
                 ))}
               </SelectContent>
             </Select>
+            <Dialog open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <TagIcon className="mr-2 h-4 w-4" />
+                  Manage Tags
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Manage Tags</DialogTitle>
+                  <DialogDescription>
+                    Create, edit, or delete tags for organizing your links
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tag-name">Tag Name *</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="tag-name"
+                        placeholder="Enter tag name"
+                        value={editingTag ? editingTag.name : newTag.name}
+                        onChange={(e) =>
+                          editingTag
+                            ? setEditingTag({ ...editingTag, name: e.target.value })
+                            : setNewTag({ ...newTag, name: e.target.value })
+                        }
+                        className="flex-1"
+                      />
+                      <Input
+                        type="color"
+                        value={editingTag ? editingTag.color || '#3b82f6' : newTag.color}
+                        onChange={(e) =>
+                          editingTag
+                            ? setEditingTag({ ...editingTag, color: e.target.value })
+                            : setNewTag({ ...newTag, color: e.target.value })
+                        }
+                        className="w-20"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {editingTag ? (
+                      <>
+                        <Button onClick={handleUpdateTag} className="flex-1">
+                          Update Tag
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setEditingTag(null);
+                            setNewTag({ name: '', color: '#3b82f6' });
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button onClick={handleCreateTag} className="flex-1">
+                        Create Tag
+                      </Button>
+                    )}
+                  </div>
+                  <div className="border-t pt-4">
+                    <Label className="mb-3 block">Existing Tags</Label>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {tags.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No tags yet. Create one above!</p>
+                      ) : (
+                        tags.map((tag) => (
+                          <div
+                            key={tag.id}
+                            className="flex items-center justify-between p-2 rounded-md border hover:bg-accent"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-4 h-4 rounded"
+                                style={{ backgroundColor: tag.color || '#3b82f6' }}
+                              />
+                              <span>{tag.name}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingTag(tag);
+                                  setNewTag({ name: tag.name, color: tag.color || '#3b82f6' });
+                                }}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteTag(tag.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -316,6 +577,48 @@ function HomeContent() {
                         setNewLink({ ...newLink, url: e.target.value })
                       }
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tags</Label>
+                    <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                      {tags.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No tags available. Create tags in "Manage Tags" first.
+                        </p>
+                      ) : (
+                        tags.map((tag) => (
+                          <div key={tag.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`tag-${tag.id}`}
+                              checked={newLink.tags.includes(tag.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setNewLink({
+                                    ...newLink,
+                                    tags: [...newLink.tags, tag.id],
+                                  });
+                                } else {
+                                  setNewLink({
+                                    ...newLink,
+                                    tags: newLink.tags.filter((t) => t !== tag.id),
+                                  });
+                                }
+                              }}
+                            />
+                            <Label
+                              htmlFor={`tag-${tag.id}`}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <div
+                                className="w-3 h-3 rounded"
+                                style={{ backgroundColor: tag.color || '#3b82f6' }}
+                              />
+                              {tag.name}
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
                 <DialogFooter>
@@ -386,19 +689,31 @@ function HomeContent() {
                             {getLinkDescription(link)}
                           </p>
                         )}
-                        {link.expand?.tags && link.expand.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {link.expand.tags.map((tag) => (
-                              <Badge
-                                key={tag.id}
-                                variant="outline"
-                                style={{ borderColor: tag.color || '#3b82f6' }}
-                              >
-                                {tag.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
+                        <div className="flex items-center justify-between">
+                          {link.expand?.tags && link.expand.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {link.expand.tags.map((tag) => (
+                                <Badge
+                                  key={tag.id}
+                                  variant="outline"
+                                  style={{ borderColor: tag.color || '#3b82f6' }}
+                                  className="cursor-pointer hover:opacity-80"
+                                  onClick={() => toggleLinkTag(link.id, tag.id)}
+                                >
+                                  {tag.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditLink(link)}
+                            className="ml-auto"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   );
@@ -448,19 +763,31 @@ function HomeContent() {
                                 {getLinkDescription(link)}
                               </p>
                             )}
-                            {link.expand?.tags && link.expand.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {link.expand.tags.map((tag) => (
-                                  <Badge
-                                    key={tag.id}
-                                    variant="outline"
-                                    style={{ borderColor: tag.color || '#3b82f6' }}
-                                  >
-                                    {tag.name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between">
+                              {link.expand?.tags && link.expand.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {link.expand.tags.map((tag) => (
+                                    <Badge
+                                      key={tag.id}
+                                      variant="outline"
+                                      style={{ borderColor: tag.color || '#3b82f6' }}
+                                      className="cursor-pointer hover:opacity-80"
+                                      onClick={() => toggleLinkTag(link.id, tag.id)}
+                                    >
+                                      {tag.name}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditLink(link)}
+                                className="ml-auto"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -469,6 +796,91 @@ function HomeContent() {
                 })}
               </div>
             )}
+
+            {/* Edit Link Dialog */}
+            <Dialog open={isEditLinkDialogOpen} onOpenChange={setIsEditLinkDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Link</DialogTitle>
+                  <DialogDescription>
+                    Update link details and tags
+                  </DialogDescription>
+                </DialogHeader>
+                {editingLink && (
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-title">Title</Label>
+                      <Input
+                        id="edit-title"
+                        value={editingLink.title || ''}
+                        onChange={(e) =>
+                          setEditingLink({ ...editingLink, title: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-description">Description</Label>
+                      <Input
+                        id="edit-description"
+                        value={editingLink.description || ''}
+                        onChange={(e) =>
+                          setEditingLink({ ...editingLink, description: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tags</Label>
+                      <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                        {tags.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No tags available. Create tags in "Manage Tags" first.
+                          </p>
+                        ) : (
+                          tags.map((tag) => (
+                            <div key={tag.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`edit-tag-${tag.id}`}
+                                checked={(editingLink.tags || []).includes(tag.id)}
+                                onCheckedChange={(checked) => {
+                                  const currentTags = editingLink.tags || [];
+                                  if (checked) {
+                                    setEditingLink({
+                                      ...editingLink,
+                                      tags: [...currentTags, tag.id],
+                                    });
+                                  } else {
+                                    setEditingLink({
+                                      ...editingLink,
+                                      tags: currentTags.filter((t) => t !== tag.id),
+                                    });
+                                  }
+                                }}
+                              />
+                              <Label
+                                htmlFor={`edit-tag-${tag.id}`}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <div
+                                  className="w-3 h-3 rounded"
+                                  style={{ backgroundColor: tag.color || '#3b82f6' }}
+                                />
+                                {tag.name}
+                              </Label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsEditLinkDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveLinkEdit}>Save Changes</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {pagination.totalPages > 1 && (
               <div className="mt-8">
