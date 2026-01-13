@@ -143,6 +143,8 @@ async function setupCollections() {
                         name: 'tags',
                         type: 'relation',
                         required: false,
+                        minSelect: 0,
+                        maxSelect: 100,
                         collectionId: tagsCollectionId,
                         cascadeDelete: false,
                         displayFields: ['name', 'color'],
