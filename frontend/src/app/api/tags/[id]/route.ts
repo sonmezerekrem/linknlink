@@ -20,10 +20,10 @@ async function getAuthenticatedUser() {
 // PUT/PATCH - Update tag
 export async function PUT(
     request: NextRequest,
-    {params}: { params: { id: string } }
+    {params}: { params: Promise<{ id: string }> }
 ) {
-    const aParams = await params;
     try {
+        const { id } = await params;
         const user = await getAuthenticatedUser();
         if (!user) {
             return NextResponse.json({error: 'Unauthorized'}, {status: 401});
@@ -43,7 +43,7 @@ export async function PUT(
         const body = await request.json();
         const {name, color} = body;
 
-        const tag = await pb.collection('tags').update(aParams.id, {
+        const tag = await pb.collection('tags').update(id, {
             name: name || undefined,
             color: color || undefined,
         });
@@ -61,10 +61,10 @@ export async function PUT(
 // DELETE - Delete tag
 export async function DELETE(
     request: NextRequest,
-    {params}: { params: { id: string } }
+    {params}: { params: Promise<{ id: string }> }
 ) {
-    const aParams = await params;
     try {
+        const { id } = await params;
         const user = await getAuthenticatedUser();
         if (!user) {
             return NextResponse.json({error: 'Unauthorized'}, {status: 401});
@@ -81,7 +81,7 @@ export async function DELETE(
         const authData = JSON.parse(authCookie.value);
         pb.authStore.save(authData.token, authData.model);
 
-        await pb.collection('tags').delete(aParams.id);
+        await pb.collection('tags').delete(id);
 
         return NextResponse.json({success: true});
     } catch (error: any) {

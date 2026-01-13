@@ -109,7 +109,6 @@ export function ManageTagsDialog({
                   )}
                   style={{
                     backgroundColor: color.value,
-                    ringColor: color.value,
                   }}
                   title={color.name}
                 >

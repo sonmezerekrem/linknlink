@@ -20,10 +20,10 @@ async function getAuthenticatedUser() {
 // PUT/PATCH - Update link
 export async function PUT(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const aParams = await params;
+        const { id } = await params;
 
         const user = await getAuthenticatedUser();
         if (!user) {
@@ -52,7 +52,7 @@ export async function PUT(
         if (is_favorite !== undefined) updateData.is_favorite = is_favorite;
         if (archived !== undefined) updateData.archived = archived;
 
-        const link = await pb.collection('links').update(aParams.id, updateData, {
+        const link = await pb.collection('links').update(id, updateData, {
             expand: 'tags',
         });
 
@@ -69,10 +69,10 @@ export async function PUT(
 // DELETE - Delete link
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const aParams = await params;
+        const { id } = await params;
 
         const user = await getAuthenticatedUser();
         if (!user) {
@@ -90,7 +90,7 @@ export async function DELETE(
         const authData = JSON.parse(authCookie.value);
         pb.authStore.save(authData.token, authData.model);
 
-        await pb.collection('links').delete(aParams.id);
+        await pb.collection('links').delete(id);
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
