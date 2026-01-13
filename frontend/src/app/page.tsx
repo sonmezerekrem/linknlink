@@ -39,6 +39,7 @@ function HomeContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -77,6 +78,15 @@ function HomeContent() {
     tags: [] as string[],
   });
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const fetchLinks = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -84,7 +94,7 @@ function HomeContent() {
         page: page.toString(),
         perPage: '12',
       });
-      if (search) params.append('search', search);
+      if (debouncedSearch) params.append('search', debouncedSearch);
       if (selectedTag && selectedTag !== 'all') params.append('tagId', selectedTag);
 
       const response = await fetch(`/api/links?${params}`, {
@@ -116,7 +126,7 @@ function HomeContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, search, selectedTag]);
+  }, [page, debouncedSearch, selectedTag]);
 
   const fetchTags = useCallback(async () => {
     try {
