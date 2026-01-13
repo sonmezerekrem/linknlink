@@ -8,7 +8,7 @@ interface AuthContextType {
   user: RecordModel | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (username: string, email: string, password: string, passwordConfirm: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, passwordConfirm: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -39,8 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(data.user);
   };
 
-  const signup = async (username: string, email: string, password: string, passwordConfirm: string) => {
-    const data = await apiSignup(username, email, password, passwordConfirm);
+  const signup = async (name: string, email: string, password: string, passwordConfirm: string) => {
+    const data = await apiSignup(name, email, password, passwordConfirm);
     setUser(data.user);
   };
 

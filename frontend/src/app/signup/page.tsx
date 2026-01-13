@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Link2 } from 'lucide-react';
 
 export default function SignupPage() {
-  const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -44,7 +44,7 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      await signup(username, email, password, passwordConfirm);
+      await signup(name, email, password, passwordConfirm);
       router.push('/');
     } catch (err: any) {
       setError(err.message || 'Failed to create account. Please try again.');
@@ -90,16 +90,16 @@ export default function SignupPage() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="name">Name</Label>
                   <Input
-                    id="username"
+                    id="name"
                     type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     required
-                    placeholder="johndoe"
+                    placeholder="John Doe"
                     className="h-11"
-                    autoComplete="username"
+                    autoComplete="name"
                   />
                 </div>
 
