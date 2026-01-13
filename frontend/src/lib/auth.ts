@@ -18,14 +18,14 @@ export async function login(email: string, password: string) {
   return response.json();
 }
 
-export async function signup(email: string, password: string, passwordConfirm: string) {
+export async function signup(username: string, email: string, password: string, passwordConfirm: string) {
   const response = await fetch('/api/auth/signup', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
-    body: JSON.stringify({ email, password, passwordConfirm }),
+    body: JSON.stringify({ username, email, password, passwordConfirm }),
   });
 
   if (!response.ok) {

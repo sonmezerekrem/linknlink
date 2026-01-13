@@ -4,11 +4,11 @@ import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, passwordConfirm } = await request.json();
+    const { username, email, password, passwordConfirm } = await request.json();
 
-    if (!email || !password || !passwordConfirm) {
+    if (!username || !email || !password || !passwordConfirm) {
       return NextResponse.json(
-        { error: 'Email, password, and password confirmation are required' },
+        { error: 'Username, email, password, and password confirmation are required' },
         { status: 400 }
       );
     }
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     
     // Create user
     await pb.collection('users').create({
+      username,
       email,
       password,
       passwordConfirm,
