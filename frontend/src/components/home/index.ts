@@ -11,3 +11,5 @@ export { LinksPagination } from './LinksPagination';
 export { ViewModeToggle } from './ViewModeToggle';
 export { UserDropdown } from './UserDropdown';
 export { UserProfileDialog } from './UserProfileDialog';
+export { HomeClient } from './HomeClient';
+export { LinksProvider } from './LinksProvider';

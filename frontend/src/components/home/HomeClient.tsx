@@ -1,11 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Header,
   LinkCard,
   LinkListItem,
   AddLinkDialog,
@@ -17,7 +14,6 @@ import {
   decode,
   type Link,
   type Tag,
-  type LinksResponse,
   type PaginationState,
 } from '@/components/home';
 import {
@@ -30,24 +26,31 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useLinksContext } from './LinksProvider';
 
-function HomeContent() {
-  const { user, logout } = useAuth();
+const DEBOUNCE_DELAY = 500;
+
+interface HomeClientProps {
+  initialPagination: PaginationState;
+  initialSearchParams: {
+    page?: string;
+    search?: string;
+    tagId?: string;
+  };
+}
+
+export function HomeClient({ initialPagination, initialSearchParams }: HomeClientProps) {
   const router = useRouter();
-  const [links, setLinks] = useState<Link[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const { links, tags, refreshLinks, refreshTags } = useLinksContext();
+
+  const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string>('all');
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<PaginationState>({
-    page: 1,
-    perPage: 12,
-    totalItems: 0,
-    totalPages: 0,
-  });
+  const [search, setSearch] = useState(initialSearchParams.search || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearchParams.search || '');
+  const [selectedTag, setSelectedTag] = useState<string>(initialSearchParams.tagId || 'all');
+  const [page, setPage] = useState(parseInt(initialSearchParams.page || '1', 10));
+  const [pagination, setPagination] = useState<PaginationState>(initialPagination);
 
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -82,12 +85,23 @@ function HomeContent() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-    }, 500);
+    }, DEBOUNCE_DELAY);
 
     return () => clearTimeout(timer);
   }, [search]);
 
-  const fetchLinks = useCallback(async () => {
+  // Update URL with search params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set('page', page.toString());
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (selectedTag && selectedTag !== 'all') params.set('tagId', selectedTag);
+
+    const newUrl = params.toString() ? `/?${params.toString()}` : '/';
+    router.replace(newUrl, { scroll: false });
+  }, [page, debouncedSearch, selectedTag, router]);
+
+  const fetchLinksClient = useCallback(async () => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -102,12 +116,11 @@ function HomeContent() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || 'Failed to fetch links');
+        throw new Error('Failed to fetch links');
       }
 
-      const data: LinksResponse = await response.json();
-      setLinks(data.items || []);
+      const data = await response.json();
+      refreshLinks();
       setPagination({
         page: data.page || 1,
         perPage: data.perPage || 12,
@@ -116,47 +129,24 @@ function HomeContent() {
       });
     } catch (error) {
       console.error('Failed to fetch links:', error);
-      setLinks([]);
-      setPagination({
-        page: 1,
-        perPage: 12,
-        totalItems: 0,
-        totalPages: 0,
-      });
     } finally {
       setIsLoading(false);
     }
-  }, [page, debouncedSearch, selectedTag]);
-
-  const fetchTags = useCallback(async () => {
-    try {
-      const response = await fetch('/api/tags', {
-        credentials: 'include',
-      });
-      const data = await response.json();
-      setTags(data);
-    } catch (error) {
-      console.error('Failed to fetch tags:', error);
-    }
-  }, []);
+  }, [page, debouncedSearch, selectedTag, refreshLinks]);
 
   useEffect(() => {
-    fetchTags();
-  }, [fetchTags]);
+    fetchLinksClient();
+  }, [fetchLinksClient]);
 
-  useEffect(() => {
-    fetchLinks();
-  }, [fetchLinks]);
-
-  const handleSearch = (value: string) => {
+  const handleSearch = useCallback((value: string) => {
     setSearch(value);
     setPage(1);
-  };
+  }, []);
 
-  const handleTagFilter = (tagId: string) => {
+  const handleTagFilter = useCallback((tagId: string) => {
     setSelectedTag(tagId);
     setPage(1);
-  };
+  }, []);
 
   const handleCreateLink = async () => {
     try {
@@ -176,7 +166,7 @@ function HomeContent() {
 
       setIsDialogOpen(false);
       setNewLink({ url: '', tags: [] });
-      fetchLinks();
+      fetchLinksClient();
     } catch (error: any) {
       setAlertDialog({
         open: true,
@@ -211,7 +201,7 @@ function HomeContent() {
       }
 
       setNewTag({ name: '', color: '#3b82f6' });
-      await fetchTags();
+      await refreshTags();
     } catch (error: any) {
       setAlertDialog({
         open: true,
@@ -248,8 +238,8 @@ function HomeContent() {
 
       setEditingTag(null);
       setNewTag({ name: '', color: '#3b82f6' });
-      await fetchTags();
-      await fetchLinks();
+      await refreshTags();
+      await fetchLinksClient();
     } catch (error: any) {
       setAlertDialog({
         open: true,
@@ -276,8 +266,8 @@ function HomeContent() {
             throw new Error(error.error || 'Failed to delete tag');
           }
 
-          fetchTags();
-          fetchLinks();
+          refreshTags();
+          fetchLinksClient();
           setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
         } catch (error: any) {
           setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
@@ -311,7 +301,7 @@ function HomeContent() {
         throw new Error(error.error || 'Failed to update link');
       }
 
-      fetchLinks();
+      fetchLinksClient();
     } catch (error: any) {
       setAlertDialog({
         open: true,
@@ -356,7 +346,7 @@ function HomeContent() {
             throw new Error(error.error || 'Failed to delete link');
           }
 
-          fetchLinks();
+          fetchLinksClient();
           setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
         } catch (error: any) {
           setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} });
@@ -401,7 +391,7 @@ function HomeContent() {
 
       setIsEditLinkDialogOpen(false);
       setEditingLink(null);
-      fetchLinks();
+      fetchLinksClient();
     } catch (error: any) {
       setAlertDialog({
         open: true,
@@ -421,162 +411,151 @@ function HomeContent() {
 
     const currentTags = link.tags || [];
     const newTags = currentTags.includes(tagId)
-      ? currentTags.filter((t) => t !== tagId)
+      ? currentTags.filter((t: string) => t !== tagId)
       : [...currentTags, tagId];
 
     handleUpdateLinkTags(linkId, newTags);
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.push('/login');
-  };
+  const hasNoResults = useMemo(() => links.length === 0, [links.length]);
+  const isFiltered = useMemo(
+    () => search !== '' || selectedTag !== 'all',
+    [search, selectedTag]
+  );
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
-      <Header user={user} onLogout={handleLogout} />
+    <>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 items-center gap-4">
+          <SearchAndFilters
+            search={search}
+            selectedTag={selectedTag}
+            tags={tags}
+            onSearchChange={handleSearch}
+            onTagFilterChange={handleTagFilter}
+          />
+          <ManageTagsDialog
+            isOpen={isTagDialogOpen}
+            onOpenChange={setIsTagDialogOpen}
+            tags={tags}
+            editingTag={editingTag}
+            newTag={newTag}
+            onEditingTagChange={setEditingTag}
+            onNewTagChange={setNewTag}
+            onCreateTag={handleCreateTag}
+            onUpdateTag={handleUpdateTag}
+            onDeleteTag={handleDeleteTag}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
+          <AddLinkDialog
+            isOpen={isDialogOpen}
+            onOpenChange={setIsDialogOpen}
+            tags={tags}
+            newLink={newLink}
+            onNewLinkChange={setNewLink}
+            onSubmit={handleCreateLink}
+          />
+        </div>
+      </div>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 items-center gap-4">
-            <SearchAndFilters
-              search={search}
-              selectedTag={selectedTag}
-              tags={tags}
-              onSearchChange={handleSearch}
-              onTagFilterChange={handleTagFilter}
-            />
-            <ManageTagsDialog
-              isOpen={isTagDialogOpen}
-              onOpenChange={setIsTagDialogOpen}
-              tags={tags}
-              editingTag={editingTag}
-              newTag={newTag}
-              onEditingTagChange={setEditingTag}
-              onNewTagChange={setNewTag}
-              onCreateTag={handleCreateTag}
-              onUpdateTag={handleUpdateTag}
-              onDeleteTag={handleDeleteTag}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
-            <AddLinkDialog
-              isOpen={isDialogOpen}
-              onOpenChange={setIsDialogOpen}
-              tags={tags}
-              newLink={newLink}
-              onNewLinkChange={setNewLink}
-              onSubmit={handleCreateLink}
-            />
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-lg text-muted-foreground">Loading...</div>
+        </div>
+      ) : hasNoResults ? (
+        <div className="flex flex-col items-center justify-center py-20 px-4">
+          <div className="text-center max-w-md">
+            <p className="text-lg font-semibold mb-2">No links found</p>
+            <p className="text-sm text-muted-foreground">
+              {isFiltered
+                ? 'Try adjusting your search or filters to find what you\'re looking for.'
+                : 'Get started by adding your first link using the "Add Link" button above.'}
+            </p>
           </div>
         </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-lg text-muted-foreground">Loading...</div>
-          </div>
-        ) : links.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 px-4">
-            <div className="text-center max-w-md">
-              <p className="text-lg font-semibold mb-2">No links found</p>
-              <p className="text-sm text-muted-foreground">
-                {search || selectedTag !== 'all'
-                  ? 'Try adjusting your search or filters to find what you\'re looking for.'
-                  : 'Get started by adding your first link using the "Add Link" button above.'}
-              </p>
+      ) : (
+        <>
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {links.map((link) => (
+                <LinkCard
+                  key={link.id}
+                  link={link}
+                  onToggleTag={toggleLinkTag}
+                  onEdit={handleEditLink}
+                  onDelete={handleDeleteLink}
+                />
+              ))}
             </div>
-          </div>
-        ) : (
-          <>
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {links.map((link) => (
-                  <LinkCard
-                    key={link.id}
-                    link={link}
-                    onToggleTag={toggleLinkTag}
-                    onEdit={handleEditLink}
-                    onDelete={handleDeleteLink}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {links.map((link) => (
-                  <LinkListItem
-                    key={link.id}
-                    link={link}
-                    onToggleTag={toggleLinkTag}
-                    onEdit={handleEditLink}
-                    onDelete={handleDeleteLink}
-                  />
-                ))}
-              </div>
-            )}
+          ) : (
+            <div className="space-y-3">
+              {links.map((link) => (
+                <LinkListItem
+                  key={link.id}
+                  link={link}
+                  onToggleTag={toggleLinkTag}
+                  onEdit={handleEditLink}
+                  onDelete={handleDeleteLink}
+                />
+              ))}
+            </div>
+          )}
 
-            <EditLinkDialog
-              isOpen={isEditLinkDialogOpen}
-              onOpenChange={setIsEditLinkDialogOpen}
-              tags={tags}
-              editingLink={editingLink}
-              onEditingLinkChange={setEditingLink}
-              onSubmit={handleSaveLinkEdit}
-            />
+          <EditLinkDialog
+            isOpen={isEditLinkDialogOpen}
+            onOpenChange={setIsEditLinkDialogOpen}
+            tags={tags}
+            editingLink={editingLink}
+            onEditingLinkChange={setEditingLink}
+            onSubmit={handleSaveLinkEdit}
+          />
 
-            <LinksPagination
-              pagination={pagination}
-              currentPage={page}
-              onPageChange={setPage}
-            />
-          </>
-        )}
+          <LinksPagination
+            pagination={pagination}
+            currentPage={page}
+            onPageChange={setPage}
+          />
+        </>
+      )}
 
-        {/* Alert Dialog */}
-        <AlertDialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{alertDialog.title}</AlertDialogTitle>
-              <AlertDialogDescription>{alertDialog.message}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogAction onClick={() => setAlertDialog({ open: false, title: '', message: '' })}>
-                OK
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      {/* Alert Dialog */}
+      <AlertDialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{alertDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{alertDialog.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setAlertDialog({ open: false, title: '', message: '' })}>
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-        {/* Confirmation Dialog */}
-        <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
-              <AlertDialogDescription>{confirmDialog.message}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} })}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  confirmDialog.onConfirm();
-                }}
-              >
-                Confirm
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </main>
-    </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <ProtectedRoute>
-      <HomeContent />
-    </ProtectedRoute>
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: () => {} })}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                confirmDialog.onConfirm();
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

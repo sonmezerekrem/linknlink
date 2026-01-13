@@ -2,11 +2,35 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+
+  // Next.js 16 features
+  // Enable cache components for Partial Prerendering
+  cacheComponents: true,
+
+  experimental: {
+    // Optimize CSS
+    optimizeCss: true,
+    // Enable optimistic client cache
+    clientRouterFilter: true,
+    // Optimize package imports
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+  },
+
   // Optimize for production
   compress: true,
   poweredByHeader: false,
-  // // Reduce memory usage
-  // swcMinify: true,
+
+  // Enable React strict mode
+  reactStrictMode: true,
+
+  // Optimize images
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
+
   // Security headers
   async headers() {
     return [
