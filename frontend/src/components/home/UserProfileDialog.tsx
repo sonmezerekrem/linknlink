@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { User } from 'lucide-react';
 import type { RecordModel } from 'pocketbase';
 
 type UserProfileDialogProps = {
@@ -78,54 +77,83 @@ export function UserProfileDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Profile</DialogTitle>
+          <DialogTitle className="text-2xl font-bold tracking-tight">Profile Settings</DialogTitle>
           <DialogDescription>
-            Manage your account settings
+            Update your personal information and account details
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
           <div className="flex justify-center">
-            <Avatar className="h-20 w-20">
-              <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
-                {getInitials(user?.email, user?.name)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-24 w-24 border-4 border-zinc-200 dark:border-zinc-800">
+                <AvatarFallback className="text-3xl font-semibold bg-primary text-primary-foreground">
+                  {getInitials(user?.email, user?.name)}
+                </AvatarFallback>
+              </Avatar>
+            </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email Address
+              </Label>
               <Input
                 id="email"
+                type="email"
                 value={user?.email || ''}
                 disabled
-                className="bg-muted"
+                className="h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
               />
+              <p className="text-xs text-muted-foreground">
+                Your email address cannot be changed
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="name">Display Name</Label>
+              <Label htmlFor="name" className="text-sm font-medium">
+                Display Name
+              </Label>
               <Input
                 id="name"
+                type="text"
                 placeholder="Enter your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="h-11"
+                autoComplete="name"
               />
+              <p className="text-xs text-muted-foreground">
+                This is how your name will appear across the app
+              </p>
             </div>
           </div>
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
           )}
           {success && (
-            <p className="text-sm text-green-600">{success}</p>
+            <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-400">
+              {success}
+            </div>
           )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading}
+            className="h-11"
+          >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
+          <Button
+            onClick={handleSave}
+            disabled={isLoading}
+            className="h-11"
+          >
             {isLoading ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogFooter>
