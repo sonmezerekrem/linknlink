@@ -37,8 +37,11 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { name } = body;
 
+    // Validate and sanitize name
+    const sanitizedName = name ? String(name).trim().slice(0, 200) : '';
+    
     const updatedUser = await pb.collection('users').update(user.id, {
-      name: name || '',
+      name: sanitizedName,
     });
 
     // Update the cookie with the new user data

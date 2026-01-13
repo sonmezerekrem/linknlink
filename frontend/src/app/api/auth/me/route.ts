@@ -11,7 +11,19 @@ export async function GET() {
       return NextResponse.json({ user: null });
     }
 
-    const authData = JSON.parse(authCookie.value);
+    let authData;
+    try {
+      authData = JSON.parse(authCookie.value);
+      // Validate auth data structure
+      if (!authData || typeof authData !== 'object' || !authData.token || !authData.model) {
+        throw new Error('Invalid auth data structure');
+      }
+    } catch (error) {
+      // Invalid cookie format, clear it
+      cookieStore.delete('pb_auth');
+      return NextResponse.json({ user: null });
+    }
+
     const pb = getServerPocketBase();
     
     // Set the auth token

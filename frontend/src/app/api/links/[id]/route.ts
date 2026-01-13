@@ -41,16 +41,51 @@ export async function PUT(
         const authData = JSON.parse(authCookie.value);
         pb.authStore.save(authData.token, authData.model);
 
+        // Verify ownership before updating
+        let existingLink;
+        try {
+            existingLink = await pb.collection('links').getOne(id);
+        } catch (error: any) {
+            if (error?.status === 404) {
+                return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+            }
+            throw error;
+        }
+
+        // Verify the link belongs to the user
+        if (existingLink.user !== user.id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
         const body = await request.json();
         const { tags, title, description, notes, is_favorite, archived } = body;
 
+        // Input validation and sanitization
         const updateData: any = {};
-        if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags : [];
-        if (title !== undefined) updateData.title = title;
-        if (description !== undefined) updateData.description = description;
-        if (notes !== undefined) updateData.notes = notes;
-        if (is_favorite !== undefined) updateData.is_favorite = is_favorite;
-        if (archived !== undefined) updateData.archived = archived;
+        if (tags !== undefined) {
+            if (!Array.isArray(tags)) {
+                return NextResponse.json({ error: 'Tags must be an array' }, { status: 400 });
+            }
+            updateData.tags = tags;
+        }
+        if (title !== undefined) {
+            const sanitizedTitle = String(title).trim().slice(0, 500);
+            updateData.title = sanitizedTitle;
+        }
+        if (description !== undefined) {
+            const sanitizedDescription = String(description).trim().slice(0, 2000);
+            updateData.description = sanitizedDescription;
+        }
+        if (notes !== undefined) {
+            const sanitizedNotes = String(notes).trim().slice(0, 5000);
+            updateData.notes = sanitizedNotes;
+        }
+        if (is_favorite !== undefined) {
+            updateData.is_favorite = Boolean(is_favorite);
+        }
+        if (archived !== undefined) {
+            updateData.archived = Boolean(archived);
+        }
 
         const link = await pb.collection('links').update(id, updateData, {
             expand: 'tags',
@@ -89,6 +124,22 @@ export async function DELETE(
 
         const authData = JSON.parse(authCookie.value);
         pb.authStore.save(authData.token, authData.model);
+
+        // Verify ownership before deleting
+        let existingLink;
+        try {
+            existingLink = await pb.collection('links').getOne(id);
+        } catch (error: any) {
+            if (error?.status === 404) {
+                return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+            }
+            throw error;
+        }
+
+        // Verify the link belongs to the user
+        if (existingLink.user !== user.id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
 
         await pb.collection('links').delete(id);
 

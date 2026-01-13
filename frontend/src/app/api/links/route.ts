@@ -22,9 +22,56 @@ async function getAuthenticatedUser() {
   }
 }
 
-// OpenGraph scraper with proper timeout
+// Validate URL to prevent SSRF attacks
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    // Only allow http and https protocols
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return false;
+    }
+    // Block localhost and private IP ranges
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.16.') ||
+      hostname.startsWith('172.17.') ||
+      hostname.startsWith('172.18.') ||
+      hostname.startsWith('172.19.') ||
+      hostname.startsWith('172.20.') ||
+      hostname.startsWith('172.21.') ||
+      hostname.startsWith('172.22.') ||
+      hostname.startsWith('172.23.') ||
+      hostname.startsWith('172.24.') ||
+      hostname.startsWith('172.25.') ||
+      hostname.startsWith('172.26.') ||
+      hostname.startsWith('172.27.') ||
+      hostname.startsWith('172.28.') ||
+      hostname.startsWith('172.29.') ||
+      hostname.startsWith('172.30.') ||
+      hostname.startsWith('172.31.') ||
+      hostname.endsWith('.local')
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// OpenGraph scraper with proper timeout and SSRF protection
 async function fetchOpenGraph(url: string) {
   try {
+    // Validate URL to prevent SSRF
+    if (!isValidUrl(url)) {
+      throw new Error('Invalid or unsafe URL');
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -119,12 +166,18 @@ export async function GET(request: NextRequest) {
       // Escape quotes and backslashes for PocketBase filter
       const escapedSearch = rawSearch
         .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"');
+        .replace(/"/g, '\\"')
+        .slice(0, 200); // Limit search length
       filter += ` && (title ~ "${escapedSearch}" || description ~ "${escapedSearch}" || url ~ "${escapedSearch}")`;
     }
 
     if (tagId && tagId.trim()) {
-      filter += ` && tags ~ "${tagId}"`;
+      // Validate tagId format (should be a valid ID)
+      const sanitizedTagId = tagId.trim().slice(0, 50);
+      if (!/^[a-zA-Z0-9_-]+$/.test(sanitizedTagId)) {
+        return NextResponse.json({ error: 'Invalid tag ID format' }, { status: 400 });
+      }
+      filter += ` && tags ~ "${sanitizedTagId}"`;
     }
 
     const result = await pb.collection('links').getList(page, perPage, {
@@ -144,8 +197,7 @@ export async function GET(request: NextRequest) {
     console.error('GET /api/links error:', error?.data || error);
     return NextResponse.json(
       { 
-        error: error?.data?.message || error?.message || 'Failed to fetch links',
-        ...(process.env.NODE_ENV === 'development' && { details: error?.data || error?.stack || error })
+        error: error?.data?.message || error?.message || 'Failed to fetch links'
       },
       { status: error?.status || 500 }
     );
@@ -207,14 +259,20 @@ export async function POST(request: NextRequest) {
       // Continue without OpenGraph data
     }
 
+    // Sanitize and validate input
+    const sanitizedTitle = (og.title || '').trim().slice(0, 500);
+    const sanitizedDescription = (og.description || '').trim().slice(0, 2000);
+    const sanitizedNotes = (notes || '').trim().slice(0, 5000);
+    const sanitizedTags = Array.isArray(tags) ? tags.filter((tag: any) => typeof tag === 'string' && tag.length <= 50) : [];
+
     const link = await pb.collection('links').create({
       url: url.trim(),
-      title: og.title || '',
-      description: og.description || '',
-      og_image: og.image || '',
-      og_site_name: og.siteName || '',
-      tags: Array.isArray(tags) ? tags : [],
-      notes: notes || '',
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      og_image: (og.image || '').slice(0, 1000),
+      og_site_name: (og.siteName || '').slice(0, 200),
+      tags: sanitizedTags,
+      notes: sanitizedNotes,
       user: user.id,
       is_favorite: false,
       archived: false,

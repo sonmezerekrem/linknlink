@@ -67,9 +67,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate and sanitize input
+    const sanitizedName = String(name).trim().slice(0, 100);
+    if (!sanitizedName) {
+      return NextResponse.json(
+        { error: 'Tag name cannot be empty' },
+        { status: 400 }
+      );
+    }
+
+    // Validate hex color format
+    const tagColor = color || '#3b82f6';
+    const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+    if (!hexColorRegex.test(tagColor)) {
+      return NextResponse.json(
+        { error: 'Invalid color format' },
+        { status: 400 }
+      );
+    }
+
     const tag = await pb.collection('tags').create({
-      name,
-      color: color || '#3b82f6',
+      name: sanitizedName,
+      color: tagColor,
       user: user.id,
     });
 

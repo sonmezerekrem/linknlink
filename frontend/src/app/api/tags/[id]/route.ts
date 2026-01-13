@@ -40,13 +40,44 @@ export async function PUT(
         const authData = JSON.parse(authCookie.value);
         pb.authStore.save(authData.token, authData.model);
 
+        // Verify ownership before updating
+        let existingTag;
+        try {
+            existingTag = await pb.collection('tags').getOne(id);
+        } catch (error: any) {
+            if (error?.status === 404) {
+                return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
+            }
+            throw error;
+        }
+
+        // Verify the tag belongs to the user
+        if (existingTag.user !== user.id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
         const body = await request.json();
         const {name, color} = body;
 
-        const tag = await pb.collection('tags').update(id, {
-            name: name || undefined,
-            color: color || undefined,
-        });
+        // Input validation
+        const updateData: any = {};
+        if (name !== undefined) {
+            const sanitizedName = String(name).trim().slice(0, 100);
+            if (!sanitizedName) {
+                return NextResponse.json({ error: 'Tag name cannot be empty' }, { status: 400 });
+            }
+            updateData.name = sanitizedName;
+        }
+        if (color !== undefined) {
+            // Validate hex color format
+            const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+            if (!hexColorRegex.test(color)) {
+                return NextResponse.json({ error: 'Invalid color format' }, { status: 400 });
+            }
+            updateData.color = color;
+        }
+
+        const tag = await pb.collection('tags').update(id, updateData);
 
         return NextResponse.json(tag);
     } catch (error: any) {
@@ -80,6 +111,22 @@ export async function DELETE(
 
         const authData = JSON.parse(authCookie.value);
         pb.authStore.save(authData.token, authData.model);
+
+        // Verify ownership before deleting
+        let existingTag;
+        try {
+            existingTag = await pb.collection('tags').getOne(id);
+        } catch (error: any) {
+            if (error?.status === 404) {
+                return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
+            }
+            throw error;
+        }
+
+        // Verify the tag belongs to the user
+        if (existingTag.user !== user.id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
 
         await pb.collection('tags').delete(id);
 
