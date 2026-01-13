@@ -1,19 +1,41 @@
 services:
-  pocketbase:
-    image: ghcr.io/muchobien/pocketbase:latest
-    container_name: pocketbase
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: linknlink-backend
     restart: unless-stopped
     ports:
       - "8090:8090"
     volumes:
-      - pb_data:/pb_data
-      - pb_public:/pb_public
+      - backend_data:/app/pb_data
+    working_dir: /app
     healthcheck:
-      test: wget --no-verbose --tries=1 --spider http://localhost:8090/api/health || exit 1
-      interval: 5s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/api/health"]
+      interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - linknlink-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: linknlink-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    networks:
+      - linknlink-network
 
 volumes:
-  pb_data:
-  pb_public:
+  backend_data:
+
+networks:
+  linknlink-network:
+    driver: bridge
