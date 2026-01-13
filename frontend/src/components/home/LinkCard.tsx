@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import type { Link } from './types';
 import { getLinkTitle, getLinkDescription, getLinkImage } from './utils';
 
@@ -24,7 +24,7 @@ export function LinkCard({ link, onToggleTag, onEdit, onDelete }: LinkCardProps)
   const imageUrl = getLinkImage(link);
 
   return (
-    <Card className="group hover:shadow-xl transition-all duration-300 overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 pt-0">
+    <Card className="group hover:shadow-xl transition-all duration-300 overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
       <a
         href={link.url}
         target="_blank"
@@ -44,57 +44,24 @@ export function LinkCard({ link, onToggleTag, onEdit, onDelete }: LinkCardProps)
           <div className="h-48 w-full bg-gradient-to-br from-primary/20 via-purple-500/20 to-pink-500/20" />
         )}
       </a>
-      <CardHeader className="pb-3">
+      <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <a
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group-hover:text-primary transition-colors"
+            className="group-hover:text-primary transition-colors flex-1 min-w-0"
           >
-            <CardTitle className="line-clamp-2 text-base font-semibold tracking-tight">
+            <h3 className="line-clamp-2 text-base font-semibold tracking-tight">
               {getLinkTitle(link)}
-            </CardTitle>
+            </h3>
           </a>
-          <a
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        </div>
-        {link.og_site_name && (
-          <CardDescription className="text-xs">{link.og_site_name}</CardDescription>
-        )}
-      </CardHeader>
-      <CardContent className="pt-0">
-        {link.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-            {getLinkDescription(link)}
-          </p>
-        )}
-        <div className="flex items-center justify-between">
-          {link.expand?.tags && link.expand.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {link.expand.tags.map((tag) => (
-                <Badge
-                  key={tag.id}
-                  style={{ backgroundColor: tag.color || '#3b82f6', color: 'white' }}
-                  className="text-xs px-2 py-0.5"
-                >
-                  {tag.name}
-                </Badge>
-              ))}
-            </div>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="ml-auto h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-8 w-8 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
@@ -115,6 +82,32 @@ export function LinkCard({ link, onToggleTag, onEdit, onDelete }: LinkCardProps)
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {link.og_site_name && (
+          <p className="text-xs text-muted-foreground">
+            {link.og_site_name}
+          </p>
+        )}
+
+        {link.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {getLinkDescription(link)}
+          </p>
+        )}
+
+        {link.expand?.tags && link.expand.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {link.expand.tags.map((tag) => (
+              <Badge
+                key={tag.id}
+                style={{ backgroundColor: tag.color || '#3b82f6', color: 'white' }}
+                className="text-xs px-2 py-0.5"
+              >
+                {tag.name}
+              </Badge>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
