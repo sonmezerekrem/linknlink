@@ -266,7 +266,11 @@ function HomeContent() {
     }
   };
 
-  const handleUpdateLinkTags = async (linkId: string, newTags: string[]) => {
+  const handleUpdateLinkTags = async (linkId: string | undefined, newTags: string[]) => {
+    if (!linkId) {
+      console.error('Missing link id when updating tags');
+      return;
+    }
     try {
       const response = await fetch(`/api/links/${linkId}`, {
         method: 'PUT',
@@ -289,12 +293,20 @@ function HomeContent() {
   };
 
   const handleEditLink = (link: Link) => {
-    setEditingLink(link);
+    setEditingLink({
+      ...link,
+      title: decode(link.title),
+      description: decode(link.description),
+    });
     setIsEditLinkDialogOpen(true);
   };
 
   const handleSaveLinkEdit = async () => {
     if (!editingLink) return;
+    if (!editingLink.id) {
+      alert('Link id is missing. Please reload and try again.');
+      return;
+    }
     try {
       const response = await fetch(`/api/links/${editingLink.id}`, {
         method: 'PUT',
@@ -322,7 +334,11 @@ function HomeContent() {
     }
   };
 
-  const toggleLinkTag = (linkId: string, tagId: string) => {
+  const toggleLinkTag = (linkId: string | undefined, tagId: string) => {
+    if (!linkId) {
+      console.error('Missing link id when toggling tag');
+      return;
+    }
     const link = links.find((l) => l.id === linkId);
     if (!link) return;
 
