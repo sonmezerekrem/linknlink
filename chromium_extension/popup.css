@@ -232,7 +232,7 @@ body {
 .preview-image {
   width: 100px;
   min-width: 100px;
-  height: 100px;
+  height: 70px;
   background: linear-gradient(to bottom right, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2), rgba(4, 120, 87, 0.2));
   background-size: cover;
   background-position: center;
