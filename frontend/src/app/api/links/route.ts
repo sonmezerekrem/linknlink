@@ -276,20 +276,33 @@ export async function GET(request: NextRequest) {
 // POST - Create new link
 export async function POST(request: NextRequest) {
   try {
-    const pb = getServerPocketBase();
-    
-    // Get authenticated user (supports both cookie and token auth)
+    // Get authenticated user first - this sets up PocketBase auth
     const user = await getAuthenticatedUser(request);
     if (!user) {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return addCorsHeaders(response, request);
     }
 
-    // If we authenticated via header, pb.authStore is already set
-    // Otherwise, get auth from cookie
+    // Get the SAME PocketBase instance that was used in getAuthenticatedUser
+    // We need to ensure auth is set on the instance we'll use for creating
+    const pb = getServerPocketBase();
+    
+    // Re-set auth to ensure it's on this instance
     const authDataHeader = request.headers.get('x-auth-data');
-    if (!authDataHeader) {
-      // Only check cookie if we didn't use header auth
+    if (authDataHeader) {
+      try {
+        const headerAuthData = JSON.parse(authDataHeader);
+        if (headerAuthData.token && headerAuthData.model) {
+          pb.authStore.save(headerAuthData.token, headerAuthData.model);
+          console.log('Auth set from header for POST');
+        }
+      } catch (e) {
+        console.error('Error parsing header auth data in POST:', e);
+        const response = NextResponse.json({ error: 'Invalid auth data' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
+    } else {
+      // Get auth from cookie
       const cookieStore = await cookies();
       const authCookie = cookieStore.get('pb_auth');
       
@@ -308,6 +321,27 @@ export async function POST(request: NextRequest) {
         return addCorsHeaders(response, request);
       }
     }
+    
+    // Verify auth is valid
+    if (!pb.authStore.isValid || !pb.authStore.model) {
+      console.error('PocketBase auth not valid after setup!', {
+        isValid: pb.authStore.isValid,
+        hasModel: !!pb.authStore.model,
+        hasToken: !!pb.authStore.token
+      });
+      const response = NextResponse.json(
+        { error: 'Authentication invalid' },
+        { status: 401 }
+      );
+      return addCorsHeaders(response, request);
+    }
+    
+    console.log('PocketBase auth status before create:', {
+      isValid: pb.authStore.isValid,
+      userId: pb.authStore.model?.id,
+      tokenPresent: !!pb.authStore.token,
+      expectedUserId: user.id
+    });
 
     const body = await request.json();
     const { url, tags, notes, title, description } = body;
@@ -391,32 +425,121 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('Creating link with data:', {
-      url: url.trim(),
-      title: sanitizedTitle,
-      description: sanitizedDescription,
-      tagIds: tagIds,
-      notes: sanitizedNotes,
-      userId: user.id
+    // Ensure PocketBase auth is set correctly
+    // If we authenticated via header, pb.authStore should already be set
+    // But let's make sure it's still valid
+    if (!pb.authStore.isValid) {
+      console.error('PocketBase auth store is not valid!');
+      const response = NextResponse.json(
+        { error: 'Authentication expired. Please sign in again.' },
+        { status: 401 }
+      );
+      return addCorsHeaders(response, request);
+    }
+    
+    console.log('PocketBase auth check:', {
+      isValid: pb.authStore.isValid,
+      userId: pb.authStore.model?.id,
+      token: pb.authStore.token ? 'present' : 'missing'
     });
-
-    const link = await pb.collection('links').create({
+    
+    // Prepare link data - ensure no empty strings for optional fields
+    const linkData: any = {
       url: url.trim(),
-      title: sanitizedTitle,
-      description: sanitizedDescription,
-      og_image: (og.image || '').slice(0, 1000),
-      og_site_name: (og.siteName || '').slice(0, 200),
-      tags: tagIds, // Use tag IDs, not names
-      notes: sanitizedNotes,
       user: user.id,
       is_favorite: false,
       archived: false,
-    }, {
-      expand: 'tags',
+    };
+    
+    // Only add optional fields if they have values
+    if (sanitizedTitle) {
+      linkData.title = sanitizedTitle;
+    }
+    if (sanitizedDescription) {
+      linkData.description = sanitizedDescription;
+    }
+    if (sanitizedNotes) {
+      linkData.notes = sanitizedNotes;
+    }
+    if (og.image) {
+      linkData.og_image = og.image.slice(0, 1000);
+    }
+    if (og.siteName) {
+      linkData.og_site_name = og.siteName.slice(0, 200);
+    }
+    if (tagIds.length > 0) {
+      linkData.tags = tagIds;
+    }
+
+    console.log('Creating link with data:', linkData);
+    console.log('PocketBase collection:', 'links');
+    console.log('User ID:', user.id);
+    console.log('Auth before create:', {
+      isValid: pb.authStore.isValid,
+      authId: pb.authStore.model?.id,
+      tokenPresent: !!pb.authStore.token
     });
 
-    const response = NextResponse.json(link);
-    return addCorsHeaders(response, request);
+    try {
+      // Double-check auth is set before creating
+      if (!pb.authStore.isValid || !pb.authStore.model) {
+        throw new Error('PocketBase authentication not properly set');
+      }
+      
+      const link = await pb.collection('links').create(linkData, {
+        expand: 'tags',
+      });
+      
+      console.log('Link created successfully:', link.id);
+      
+      const response = NextResponse.json(link);
+      return addCorsHeaders(response, request);
+    } catch (createError: any) {
+      console.error('PocketBase create error:', createError);
+      console.error('Error type:', typeof createError);
+      console.error('Error constructor:', createError?.constructor?.name);
+      console.error('Error data:', createError?.data);
+      console.error('Error message:', createError?.message);
+      console.error('Error status:', createError?.status);
+      
+      // PocketBase errors have a specific structure
+      if (createError?.data) {
+        console.error('PocketBase error data:', JSON.stringify(createError.data, null, 2));
+        
+        // Extract field-specific validation errors
+        const fieldErrors: string[] = [];
+        for (const [field, errors] of Object.entries(createError.data)) {
+          if (field === 'message') continue; // Skip the message field itself
+          if (Array.isArray(errors)) {
+            fieldErrors.push(`${field}: ${errors.join(', ')}`);
+          } else if (typeof errors === 'object') {
+            fieldErrors.push(`${field}: ${JSON.stringify(errors)}`);
+          } else {
+            fieldErrors.push(`${field}: ${errors}`);
+          }
+        }
+        
+        if (fieldErrors.length > 0) {
+          const errorMsg = `Validation failed: ${fieldErrors.join('; ')}`;
+          console.error(errorMsg);
+          const response = NextResponse.json(
+            { error: errorMsg },
+            { status: 400 }
+          );
+          return addCorsHeaders(response, request);
+        }
+      }
+      
+      // If we have a message, use it
+      const errorMessage = createError?.data?.message || createError?.message || 'Failed to create record';
+      console.error('Final error message:', errorMessage);
+      const response = NextResponse.json(
+        { error: errorMessage },
+        { status: createError?.status || 400 }
+      );
+      return addCorsHeaders(response, request);
+    }
+
   } catch (error: any) {
     console.error('POST /api/links error:', error?.data || error);
     console.error('Error details:', {
