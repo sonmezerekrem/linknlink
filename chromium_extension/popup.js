@@ -247,10 +247,16 @@ function displayPreview(data) {
   urlEl.textContent = data.url;
 
   if (data.image) {
-    imageEl.style.backgroundImage = `url(${data.image})`;
+    imageEl.style.backgroundImage = `url("${data.image}")`;
+    imageEl.style.backgroundSize = 'cover';
+    imageEl.style.backgroundPosition = 'center';
+    imageEl.style.backgroundRepeat = 'no-repeat';
     imageEl.classList.add('has-image');
   } else {
     imageEl.style.backgroundImage = '';
+    imageEl.style.backgroundSize = '';
+    imageEl.style.backgroundPosition = '';
+    imageEl.style.backgroundRepeat = '';
     imageEl.classList.remove('has-image');
   }
 }
