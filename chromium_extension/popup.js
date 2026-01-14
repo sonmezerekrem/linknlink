@@ -3,14 +3,16 @@ let currentTab = null;
 let pageData = null;
 let authToken = null;
 let apiBaseUrl = null;
+let authCheckInterval = null;
 
 // DOM Elements
 const loginScreen = document.getElementById('login-screen');
 const mainScreen = document.getElementById('main-screen');
-const loginForm = document.getElementById('login-form');
+const loginBtn = document.getElementById('login-btn');
 const saveForm = document.getElementById('save-form');
 const loading = document.getElementById('loading');
 const bookmarkForm = document.getElementById('bookmark-form');
+const loginStatus = document.getElementById('login-status');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -18,22 +20,41 @@ document.addEventListener('DOMContentLoaded', async () => {
   const stored = await chrome.storage.local.get(['authData', 'apiBaseUrl', 'user']);
   
   if (stored.authData && stored.apiBaseUrl) {
-    authToken = stored.authData.token;
-    apiBaseUrl = stored.apiBaseUrl;
-    showMainScreen();
-    loadCurrentPage();
-  } else {
-    // Pre-fill API URL if exists
-    if (stored.apiBaseUrl) {
-      document.getElementById('api-url').value = stored.apiBaseUrl;
+    // Verify auth is still valid
+    const isValid = await verifyAuth(stored.apiBaseUrl, stored.authData);
+    if (isValid) {
+      authToken = stored.authData.token;
+      apiBaseUrl = stored.apiBaseUrl;
+      showMainScreen();
+      loadCurrentPage();
+      return;
+    } else {
+      // Auth expired, clear it
+      await chrome.storage.local.remove(['authData', 'user']);
     }
-    showLoginScreen();
   }
+  
+  // Pre-fill API URL if exists
+  if (stored.apiBaseUrl) {
+    document.getElementById('api-url').value = stored.apiBaseUrl;
+  }
+  showLoginScreen();
 
   // Event listeners
-  loginForm.addEventListener('submit', handleLogin);
+  loginBtn.addEventListener('click', handleLoginClick);
   saveForm.addEventListener('submit', handleSave);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  
+  // Check for auth on popup open (in case user just logged in)
+  checkAuthFromCookies();
+  
+  // Cleanup on popup close
+  window.addEventListener('beforeunload', () => {
+    if (authCheckInterval) {
+      clearInterval(authCheckInterval);
+      authCheckInterval = null;
+    }
+  });
 });
 
 function showLoginScreen() {
@@ -57,7 +78,9 @@ async function loadCurrentPage() {
     currentTab = tab;
 
     if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) {
-      showError('Cannot save this page');
+      showSaveError('Cannot save this page');
+      loading.classList.add('hidden');
+      bookmarkForm.classList.remove('hidden');
       return;
     }
 
@@ -79,8 +102,7 @@ async function loadCurrentPage() {
     }
   } catch (error) {
     console.error('Error loading page:', error);
-    showError('Failed to load page data');
-  } finally {
+    showSaveError('Failed to load page data');
     loading.classList.add('hidden');
     bookmarkForm.classList.remove('hidden');
   }
@@ -104,63 +126,195 @@ function displayPreview(data) {
   }
 }
 
-async function handleLogin(e) {
-  e.preventDefault();
+// Validate and sanitize URL
+function validateApiUrl(url) {
+  try {
+    const parsed = new URL(url);
+    
+    // Enforce HTTPS only (except localhost for development)
+    if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost' && !parsed.hostname.startsWith('127.0.0.1')) {
+      throw new Error('Only HTTPS URLs are allowed (except localhost for development)');
+    }
+    
+    // Block file:// and other dangerous protocols
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('Invalid URL protocol');
+    }
+    
+    // Basic hostname validation
+    if (!parsed.hostname || parsed.hostname.length > 253) {
+      throw new Error('Invalid hostname');
+    }
+    
+    return parsed.href.replace(/\/+$/, ''); // Remove trailing slashes
+  } catch (error) {
+    if (error.message.includes('Invalid URL')) {
+      throw new Error('Please enter a valid URL (e.g., https://linknlink.example.com)');
+    }
+    throw error;
+  }
+}
+
+async function handleLoginClick() {
   hideMessages();
-
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
+  
   const apiUrl = document.getElementById('api-url').value.trim();
-
+  
   if (!apiUrl) {
-    showLoginError('Please enter API Base URL');
+    showLoginError('Please enter your LinknLink URL');
     return;
   }
 
-  // Normalize API URL (remove trailing slash)
-  const normalizedApiUrl = apiUrl.replace(/\/+$/, '');
-
-  const loginBtn = document.getElementById('login-btn');
-  loginBtn.disabled = true;
-  loginBtn.textContent = 'Signing in...';
-
   try {
-    const response = await fetch(`${normalizedApiUrl}/api/auth/login`, {
-      method: 'POST',
+    // Validate and normalize API URL
+    const normalizedApiUrl = validateApiUrl(apiUrl);
+    
+    // Store API URL
+    await chrome.storage.local.set({ apiBaseUrl: normalizedApiUrl });
+    
+    // Open login page
+    const loginUrl = `${normalizedApiUrl}/login`;
+    await chrome.tabs.create({ url: loginUrl });
+    
+    // Show status and start checking for auth
+    loginStatus.classList.remove('hidden');
+    loginBtn.disabled = true;
+    
+    // Start polling for authentication
+    startAuthCheck(normalizedApiUrl);
+  } catch (error) {
+    showLoginError(error.message || 'Invalid URL. Please enter a valid HTTPS URL.');
+    loginBtn.disabled = false;
+  }
+}
+
+async function startAuthCheck(apiBaseUrl) {
+  // Clear any existing interval
+  if (authCheckInterval) {
+    clearInterval(authCheckInterval);
+  }
+  
+  // Check immediately
+  const authenticated = await checkAuthFromCookies();
+  if (authenticated) {
+    loginStatus.classList.add('hidden');
+    loginBtn.disabled = false;
+    return;
+  }
+  
+  // Poll every 2 seconds for up to 60 seconds
+  let attempts = 0;
+  const maxAttempts = 30;
+  
+  authCheckInterval = setInterval(async () => {
+    attempts++;
+    const authenticated = await checkAuthFromCookies();
+    
+    if (authenticated || attempts >= maxAttempts) {
+      if (authCheckInterval) {
+        clearInterval(authCheckInterval);
+        authCheckInterval = null;
+      }
+      loginStatus.classList.add('hidden');
+      loginBtn.disabled = false;
+      
+      if (attempts >= maxAttempts && !authenticated) {
+        showLoginError('Authentication timeout. Please try again or refresh the extension.');
+      }
+    }
+  }, 2000);
+}
+
+async function checkAuthFromCookies() {
+  const stored = await chrome.storage.local.get(['apiBaseUrl']);
+  
+  if (!stored.apiBaseUrl) {
+    return false;
+  }
+  
+  try {
+    // Validate the stored URL before using it
+    let apiUrl;
+    try {
+      apiUrl = validateApiUrl(stored.apiBaseUrl);
+    } catch (error) {
+      console.error('Invalid stored API URL:', error);
+      return false;
+    }
+    
+    // Parse the domain from the API URL
+    const url = new URL(apiUrl);
+    
+    // Security: Only read cookies from the exact domain specified
+    // This prevents reading cookies from other domains
+    const cookie = await chrome.cookies.get({
+      url: apiUrl, // Use full URL to ensure exact domain match
+      name: 'pb_auth'
+    });
+    
+    if (!cookie || !cookie.value) {
+      return false;
+    }
+    
+    // Parse the cookie value (it's JSON)
+    const authData = JSON.parse(cookie.value);
+    
+    if (!authData.token || !authData.model) {
+      return false;
+    }
+    
+    // Verify the auth is valid
+    const isValid = await verifyAuth(stored.apiBaseUrl, authData);
+    
+    if (isValid) {
+      // Store auth data
+      await chrome.storage.local.set({
+        authData: authData,
+        user: authData.model
+      });
+      
+      authToken = authData.token;
+      apiBaseUrl = stored.apiBaseUrl;
+      
+      // Clear any polling
+      if (authCheckInterval) {
+        clearInterval(authCheckInterval);
+        authCheckInterval = null;
+      }
+      
+      loginStatus.classList.add('hidden');
+      showMainScreen();
+      loadCurrentPage();
+      
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking auth from cookies:', error);
+    return false;
+  }
+}
+
+async function verifyAuth(apiBaseUrl, authData) {
+  try {
+    // Try to make an authenticated request to verify the token
+    const response = await fetch(`${apiBaseUrl}/api/auth/me`, {
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
+        'X-Auth-Data': JSON.stringify(authData)
+      }
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Login failed');
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.user !== null;
     }
-
-    // Store auth data - store full auth data for API authentication
-    const authData = {
-      token: data.token,
-      model: data.user
-    };
-    await chrome.storage.local.set({
-      apiBaseUrl: normalizedApiUrl,
-      user: data.user,
-      authData: authData // Store full auth data for API calls
-    });
-
-    authToken = data.token;
-    apiBaseUrl = normalizedApiUrl;
-
-    showMainScreen();
-    loadCurrentPage();
+    
+    return false;
   } catch (error) {
-    console.error('Login error:', error);
-    showLoginError(error.message || 'Failed to sign in. Please check your credentials and API URL.');
-  } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'Sign In';
+    return false;
   }
 }
 
@@ -233,7 +387,7 @@ async function handleLogout() {
   authToken = null;
   apiBaseUrl = null;
   showLoginScreen();
-  document.getElementById('login-form').reset();
+  document.getElementById('api-url').value = '';
 }
 
 function showLoginError(message) {

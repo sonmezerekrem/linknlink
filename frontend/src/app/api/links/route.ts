@@ -147,19 +147,33 @@ async function fetchOpenGraph(url: string) {
   }
 }
 
-// Helper to add CORS headers
-function addCorsHeaders(response: NextResponse) {
-  response.headers.set('Access-Control-Allow-Origin', '*');
+// Helper to add CORS headers with security restrictions
+function addCorsHeaders(response: NextResponse, request?: NextRequest) {
+  // Check if request is from extension (chrome-extension://) or same origin
+  const origin = request?.headers.get('origin');
+  const isExtension = origin?.startsWith('chrome-extension://');
+  const isSameOrigin = origin && new URL(origin).hostname === request?.nextUrl.hostname;
+  
+  // Allow extension origins and same-origin requests
+  // For production, you might want to whitelist specific extension IDs
+  if (isExtension || isSameOrigin) {
+    response.headers.set('Access-Control-Allow-Origin', origin || '*');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+  } else {
+    // For web requests, use same-origin or specific allowed origins
+    // In production, replace '*' with your actual frontend domain
+    response.headers.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+  }
+  
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Data');
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
   return response;
 }
 
 // Handle OPTIONS for CORS preflight
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
   const response = new NextResponse(null, { status: 204 });
-  return addCorsHeaders(response);
+  return addCorsHeaders(response, request);
 }
 
 // GET - List links with filtering and pagination
@@ -168,7 +182,7 @@ export async function GET(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      return addCorsHeaders(response);
+      return addCorsHeaders(response, request);
     }
 
     const pb = getServerPocketBase();
@@ -176,7 +190,8 @@ export async function GET(request: NextRequest) {
     const authCookie = cookieStore.get('pb_auth');
     
     if (!authCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response, request);
     }
 
     let authData;
@@ -184,7 +199,8 @@ export async function GET(request: NextRequest) {
       authData = JSON.parse(authCookie.value);
     } catch (error) {
       console.error('Invalid auth cookie:', error);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response, request);
     }
 
     pb.authStore.save(authData.token, authData.model);
@@ -229,15 +245,16 @@ export async function GET(request: NextRequest) {
       totalItems: result.totalItems,
       totalPages: result.totalPages,
     });
-    return addCorsHeaders(response);
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('GET /api/links error:', error?.data || error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       { 
         error: error?.data?.message || error?.message || 'Failed to fetch links'
       },
       { status: error?.status || 500 }
     );
+    return addCorsHeaders(response, request);
   }
 }
 
@@ -247,7 +264,7 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      return addCorsHeaders(response);
+      return addCorsHeaders(response, request);
     }
 
     const pb = getServerPocketBase();
@@ -255,7 +272,8 @@ export async function POST(request: NextRequest) {
     const authCookie = cookieStore.get('pb_auth');
     
     if (!authCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response, request);
     }
 
     let authData;
@@ -263,7 +281,8 @@ export async function POST(request: NextRequest) {
       authData = JSON.parse(authCookie.value);
     } catch (error) {
       console.error('Invalid auth cookie:', error);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response, request);
     }
 
     pb.authStore.save(authData.token, authData.model);
@@ -319,13 +338,13 @@ export async function POST(request: NextRequest) {
     });
 
     const response = NextResponse.json(link);
-    return addCorsHeaders(response);
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('POST /api/links error:', error?.data || error);
     const response = NextResponse.json(
       { error: error?.data?.message || error?.message || 'Failed to create link' },
       { status: error?.status || 400 }
     );
-    return addCorsHeaders(response);
+    return addCorsHeaders(response, request);
   }
 }

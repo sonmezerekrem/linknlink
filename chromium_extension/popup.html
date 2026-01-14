@@ -13,22 +13,26 @@
       <h1>LinknLink</h1>
       <p class="subtitle">Sign in to save bookmarks</p>
     </div>
-    <form id="login-form">
+    <div class="login-content">
       <div class="form-group">
-        <label for="api-url">API Base URL</label>
+        <label for="api-url">LinknLink URL</label>
         <input type="url" id="api-url" placeholder="https://your-domain.com" required>
-        <small>Enter your LinknLink API base URL</small>
+        <small>Enter your LinknLink website URL</small>
       </div>
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" placeholder="your@email.com" required>
-      </div>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" placeholder="••••••••" required>
-      </div>
-      <button type="submit" class="btn btn-primary" id="login-btn">Sign In</button>
-    </form>
+      <button type="button" class="btn btn-primary" id="login-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+        Open Login Page
+      </button>
+      <p class="login-hint">This will open the login page in a new tab. After signing in, return here and the extension will automatically detect your session.</p>
+    </div>
+    <div id="login-status" class="login-status hidden">
+      <div class="spinner small"></div>
+      <p>Checking authentication...</p>
+    </div>
     <div id="login-error" class="error-message"></div>
   </div>
 
