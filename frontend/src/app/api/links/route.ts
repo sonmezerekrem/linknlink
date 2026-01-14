@@ -2,8 +2,37 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerPocketBase } from '@/lib/pocketbase-server';
 import { cookies } from 'next/headers';
 
-// Helper to get authenticated user
-async function getAuthenticatedUser() {
+// Helper to get authenticated user (supports both cookie and token auth)
+async function getAuthenticatedUser(request: NextRequest) {
+  const pb = getServerPocketBase();
+  
+  // Try token-based auth first (for extensions/API clients)
+  // Extension sends full auth data in X-Auth-Data header as JSON
+  const authDataHeader = request.headers.get('x-auth-data');
+  if (authDataHeader) {
+    try {
+      const authData = JSON.parse(authDataHeader);
+      if (authData.token && authData.model) {
+        pb.authStore.save(authData.token, authData.model);
+        // Verify token is still valid by checking if we can access the user
+        try {
+          // Try to get the user to verify token is valid
+          const user = await pb.collection('users').getOne(authData.model.id);
+          if (user && pb.authStore.isValid) {
+            return authData.model;
+          }
+        } catch (error) {
+          // Token invalid, fall through to cookie auth
+          console.error('Token validation failed:', error);
+        }
+      }
+    } catch (error) {
+      // Invalid auth data, fall through to cookie auth
+      console.error('Invalid auth data header:', error);
+    }
+  }
+  
+  // Fall back to cookie-based auth (for web app)
   const cookieStore = await cookies();
   const authCookie = cookieStore.get('pb_auth');
 
@@ -13,7 +42,6 @@ async function getAuthenticatedUser() {
 
   try {
     const authData = JSON.parse(authCookie.value);
-    const pb = getServerPocketBase();
     pb.authStore.save(authData.token, authData.model);
     return authData.model;
   } catch (error) {
@@ -127,31 +155,70 @@ async function fetchOpenGraph(url: string) {
   }
 }
 
+// Helper to add CORS headers with security restrictions
+function addCorsHeaders(response: NextResponse, request?: NextRequest) {
+  // Check if request is from extension (chrome-extension://) or same origin
+  const origin = request?.headers.get('origin');
+  const isExtension = origin?.startsWith('chrome-extension://');
+  const isSameOrigin = origin && new URL(origin).hostname === request?.nextUrl.hostname;
+  
+  // Allow extension origins and same-origin requests
+  // For production, you might want to whitelist specific extension IDs
+  if (isExtension || isSameOrigin) {
+    response.headers.set('Access-Control-Allow-Origin', origin || '*');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+  } else {
+    // For web requests, use same-origin or specific allowed origins
+    // In production, replace '*' with your actual frontend domain
+    response.headers.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+  }
+  
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Data');
+  return response;
+}
+
+// Handle OPTIONS for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  const response = new NextResponse(null, { status: 204 });
+  return addCorsHeaders(response, request);
+}
+
 // GET - List links with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const pb = getServerPocketBase();
-    const cookieStore = await cookies();
-    const authCookie = cookieStore.get('pb_auth');
     
-    if (!authCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Get authenticated user (supports both cookie and token auth)
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response, request);
     }
 
-    let authData;
-    try {
-      authData = JSON.parse(authCookie.value);
-    } catch (error) {
-      console.error('Invalid auth cookie:', error);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // If we authenticated via header, pb.authStore is already set
+    // Otherwise, get auth from cookie
+    const authDataHeader = request.headers.get('x-auth-data');
+    if (!authDataHeader) {
+      // Only check cookie if we didn't use header auth
+      const cookieStore = await cookies();
+      const authCookie = cookieStore.get('pb_auth');
+      
+      if (!authCookie) {
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
 
-    pb.authStore.save(authData.token, authData.model);
+      let authData;
+      try {
+        authData = JSON.parse(authCookie.value);
+        pb.authStore.save(authData.token, authData.model);
+      } catch (error) {
+        console.error('Invalid auth cookie:', error);
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
@@ -186,106 +253,316 @@ export async function GET(request: NextRequest) {
       sort: '-created',
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       items: result.items,
       page: result.page,
       perPage: result.perPage,
       totalItems: result.totalItems,
       totalPages: result.totalPages,
     });
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('GET /api/links error:', error?.data || error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       { 
         error: error?.data?.message || error?.message || 'Failed to fetch links'
       },
       { status: error?.status || 500 }
     );
+    return addCorsHeaders(response, request);
   }
 }
 
 // POST - Create new link
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser();
+    // Get authenticated user first - this sets up PocketBase auth
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response, request);
     }
 
+    // Get the SAME PocketBase instance that was used in getAuthenticatedUser
+    // We need to ensure auth is set on the instance we'll use for creating
     const pb = getServerPocketBase();
-    const cookieStore = await cookies();
-    const authCookie = cookieStore.get('pb_auth');
     
-    if (!authCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Re-set auth to ensure it's on this instance
+    const authDataHeader = request.headers.get('x-auth-data');
+    if (authDataHeader) {
+      try {
+        const headerAuthData = JSON.parse(authDataHeader);
+        if (headerAuthData.token && headerAuthData.model) {
+          pb.authStore.save(headerAuthData.token, headerAuthData.model);
+        }
+      } catch (e) {
+        console.error('Error parsing header auth data in POST:', e);
+        const response = NextResponse.json({ error: 'Invalid auth data' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
+    } else {
+      // Get auth from cookie
+      const cookieStore = await cookies();
+      const authCookie = cookieStore.get('pb_auth');
+      
+      if (!authCookie) {
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
 
-    let authData;
-    try {
-      authData = JSON.parse(authCookie.value);
-    } catch (error) {
-      console.error('Invalid auth cookie:', error);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      let authData;
+      try {
+        authData = JSON.parse(authCookie.value);
+        pb.authStore.save(authData.token, authData.model);
+      } catch (error) {
+        console.error('Invalid auth cookie:', error);
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
     }
-
-    pb.authStore.save(authData.token, authData.model);
+    
+    // Verify auth is valid
+    if (!pb.authStore.isValid || !pb.authStore.model) {
+      console.error('PocketBase auth not valid after setup!', {
+        isValid: pb.authStore.isValid,
+        hasModel: !!pb.authStore.model,
+        hasToken: !!pb.authStore.token
+      });
+      const response = NextResponse.json(
+        { error: 'Authentication invalid' },
+        { status: 401 }
+      );
+      return addCorsHeaders(response, request);
+    }
+    
+    // Auth verified, proceed with creating link
 
     const body = await request.json();
-    const { url, tags, notes } = body;
+    const { url, tags, notes, title, description, og_image, og_site_name } = body;
 
     if (!url || typeof url !== 'string' || !url.trim()) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'URL is required' },
         { status: 400 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Validate URL format
     try {
       new URL(url);
     } catch {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Invalid URL format' },
         { status: 400 }
       );
+      return addCorsHeaders(response, request);
     }
 
-    // Fetch OpenGraph data (best-effort, non-blocking)
+    // Use provided title/description/image from extension, or fetch OpenGraph data
     let og: { title?: string; description?: string; image?: string; siteName?: string } = {};
-    try {
-      og = await fetchOpenGraph(url);
-    } catch (ogError) {
-      console.warn('OpenGraph fetch failed, continuing without metadata:', ogError);
-      // Continue without OpenGraph data
+    
+    // If title/description are provided (from extension), use them
+    if (title || description) {
+      og.title = title;
+      og.description = description;
+      // Also use provided image and siteName if available
+      if (og_image) {
+        og.image = og_image;
+      }
+      if (og_site_name) {
+        og.siteName = og_site_name;
+      }
+      // If image/siteName not provided but we have title/description, still try to fetch them
+      if (!og.image || !og.siteName) {
+        try {
+          const fetchedOg = await fetchOpenGraph(url);
+          // Only use fetched data for fields we don't have
+          if (!og.image && fetchedOg.image) {
+            og.image = fetchedOg.image;
+          }
+          if (!og.siteName && fetchedOg.siteName) {
+            og.siteName = fetchedOg.siteName;
+          }
+        } catch (ogError) {
+          console.warn('OpenGraph fetch failed for image/siteName, continuing without:', ogError);
+        }
+      }
+    } else {
+      // Otherwise, fetch OpenGraph data (best-effort, non-blocking)
+      try {
+        og = await fetchOpenGraph(url);
+      } catch (ogError) {
+        console.warn('OpenGraph fetch failed, continuing without metadata:', ogError);
+        // Continue without OpenGraph data
+      }
     }
 
     // Sanitize and validate input
     const sanitizedTitle = (og.title || '').trim().slice(0, 500);
     const sanitizedDescription = (og.description || '').trim().slice(0, 2000);
     const sanitizedNotes = (notes || '').trim().slice(0, 5000);
-    const sanitizedTags = Array.isArray(tags) ? tags.filter((tag: any) => typeof tag === 'string' && tag.length <= 50) : [];
+    
+    // Process tags - extension sends tag names, but PocketBase expects tag IDs
+    // Convert tag names to tag IDs (find existing or create new tags)
+    let tagIds: string[] = [];
+    if (Array.isArray(tags) && tags.length > 0) {
+      const tagNames = tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0 && tag.trim().length <= 100);
+      
+      for (const tagName of tagNames) {
+        try {
+          const trimmedName = tagName.trim();
+          
+          // Try to find existing tag by name for this user
+          const existingTags = await pb.collection('tags').getFullList({
+            filter: `user = "${user.id}" && name = "${trimmedName.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}"`,
+            limit: 1,
+          });
+          
+          if (existingTags.length > 0) {
+            tagIds.push(existingTags[0].id);
+          } else {
+            // Create new tag if it doesn't exist
+            // Generate a random color for the tag
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            const newTag = await pb.collection('tags').create({
+              name: trimmedName,
+              color: randomColor,
+              user: user.id,
+            });
+            tagIds.push(newTag.id);
+          }
+        } catch (tagError: any) {
+          console.error('Error processing tag:', tagName, tagError);
+          // Continue with other tags even if one fails
+        }
+      }
+    }
 
-    const link = await pb.collection('links').create({
+    // Ensure PocketBase auth is set correctly
+    if (!pb.authStore.isValid) {
+      console.error('PocketBase auth store is not valid!');
+      const response = NextResponse.json(
+        { error: 'Authentication expired. Please sign in again.' },
+        { status: 401 }
+      );
+      return addCorsHeaders(response, request);
+    }
+    
+    // Prepare link data - ensure no empty strings for optional fields
+    const linkData: any = {
       url: url.trim(),
-      title: sanitizedTitle,
-      description: sanitizedDescription,
-      og_image: (og.image || '').slice(0, 1000),
-      og_site_name: (og.siteName || '').slice(0, 200),
-      tags: sanitizedTags,
-      notes: sanitizedNotes,
       user: user.id,
       is_favorite: false,
       archived: false,
-    }, {
-      expand: 'tags',
-    });
+    };
+    
+    // Only add optional fields if they have values
+    if (sanitizedTitle) {
+      linkData.title = sanitizedTitle;
+    }
+    if (sanitizedDescription) {
+      linkData.description = sanitizedDescription;
+    }
+    if (sanitizedNotes) {
+      linkData.notes = sanitizedNotes;
+    }
+    if (og.image) {
+      linkData.og_image = og.image.slice(0, 1000);
+    }
+    if (og.siteName) {
+      linkData.og_site_name = og.siteName.slice(0, 200);
+    }
+    if (tagIds.length > 0) {
+      linkData.tags = tagIds;
+    }
 
-    return NextResponse.json(link);
+    // Create the link
+
+    try {
+      // Double-check auth is set before creating
+      if (!pb.authStore.isValid || !pb.authStore.model) {
+        throw new Error('PocketBase authentication not properly set');
+      }
+      
+      const link = await pb.collection('links').create(linkData, {
+        expand: 'tags',
+      });
+      
+      const response = NextResponse.json(link);
+      return addCorsHeaders(response, request);
+    } catch (createError: any) {
+      console.error('PocketBase create error:', createError);
+      console.error('Error type:', typeof createError);
+      console.error('Error constructor:', createError?.constructor?.name);
+      console.error('Error data:', createError?.data);
+      console.error('Error message:', createError?.message);
+      console.error('Error status:', createError?.status);
+      
+      // PocketBase errors have a specific structure
+      if (createError?.data) {
+        console.error('PocketBase error data:', JSON.stringify(createError.data, null, 2));
+        
+        // Extract field-specific validation errors
+        const fieldErrors: string[] = [];
+        for (const [field, errors] of Object.entries(createError.data)) {
+          if (field === 'message') continue; // Skip the message field itself
+          if (Array.isArray(errors)) {
+            fieldErrors.push(`${field}: ${errors.join(', ')}`);
+          } else if (typeof errors === 'object') {
+            fieldErrors.push(`${field}: ${JSON.stringify(errors)}`);
+          } else {
+            fieldErrors.push(`${field}: ${errors}`);
+          }
+        }
+        
+        if (fieldErrors.length > 0) {
+          const errorMsg = `Validation failed: ${fieldErrors.join('; ')}`;
+          console.error(errorMsg);
+          const response = NextResponse.json(
+            { error: errorMsg },
+            { status: 400 }
+          );
+          return addCorsHeaders(response, request);
+        }
+      }
+      
+      // If we have a message, use it
+      const errorMessage = createError?.data?.message || createError?.message || 'Failed to create record';
+      console.error('Final error message:', errorMessage);
+      const response = NextResponse.json(
+        { error: errorMessage },
+        { status: createError?.status || 400 }
+      );
+      return addCorsHeaders(response, request);
+    }
+
   } catch (error: any) {
     console.error('POST /api/links error:', error?.data || error);
-    return NextResponse.json(
-      { error: error?.data?.message || error?.message || 'Failed to create link' },
+    console.error('Error details:', {
+      message: error?.message,
+      data: error?.data,
+      status: error?.status,
+      response: error?.response
+    });
+    
+    // Provide more detailed error message
+    let errorMessage = 'Failed to create link';
+    if (error?.data?.message) {
+      errorMessage = error.data.message;
+    } else if (error?.message) {
+      errorMessage = error.message;
+    } else if (error?.data) {
+      // PocketBase errors often have data object with details
+      errorMessage = JSON.stringify(error.data);
+    }
+    
+    const response = NextResponse.json(
+      { error: errorMessage },
       { status: error?.status || 400 }
     );
+    return addCorsHeaders(response, request);
   }
 }

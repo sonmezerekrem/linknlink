@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinknLink</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="login-screen" class="screen">
+    <div class="header">
+      <h1>LinknLink</h1>
+      <p class="subtitle">Sign in to save bookmarks</p>
+    </div>
+    <div class="login-content">
+      <div class="form-group">
+        <label for="api-url">LinknLink URL</label>
+        <input type="url" id="api-url" placeholder="https://your-domain.com" required>
+        <small>Enter your LinknLink website URL</small>
+      </div>
+      <button type="button" class="btn btn-primary btn-lg" id="login-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+        Open Login Page
+      </button>
+      <button type="button" class="btn btn-secondary" id="check-auth-btn" style="margin-top: 8px;">
+        Check Authentication
+      </button>
+      <p class="login-hint">Enter your LinknLink URL and click "Open Login Page". If you're already logged in, click "Check Authentication" to detect your session.</p>
+    </div>
+    <div id="login-status" class="login-status hidden">
+      <div class="spinner small"></div>
+      <p>Checking authentication...</p>
+    </div>
+    <div id="login-error" class="error-message"></div>
+  </div>
+
+  <!-- Main Screen -->
+  <div id="main-screen" class="screen hidden">
+    <div class="header">
+      <div class="header-top">
+        <h2>Save Bookmark</h2>
+        <button id="logout-btn" class="btn-icon" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading page data...</p>
+    </div>
+
+    <div id="bookmark-form" class="hidden">
+      <!-- Preview Card -->
+      <div class="preview-card" id="preview-card">
+        <div class="preview-header">
+          <div class="preview-image" id="preview-image"></div>
+          <h3 id="preview-title">Page Title</h3>
+        </div>
+        <p id="preview-description" class="preview-description"></p>
+        <p class="preview-url" id="preview-url"></p>
+      </div>
+
+      <!-- Form Fields -->
+      <form id="save-form">
+        <div class="form-group">
+          <label for="notes">Notes (optional)</label>
+          <textarea id="notes" rows="3" placeholder="Add your notes..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="tags">Tags (comma-separated)</label>
+          <input type="text" id="tags" placeholder="tag1, tag2, tag3">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" id="save-btn">
+          <span id="save-btn-text">Save Bookmark</span>
+          <span id="save-btn-loading" class="hidden">Saving...</span>
+        </button>
+      </form>
+
+      <div id="save-error" class="error-message"></div>
+      <div id="save-success" class="success-message hidden">✓ Bookmark saved!</div>
+    </div>
+  </div>
+</body>
+<script src="popup.js"></script>
+</html>
