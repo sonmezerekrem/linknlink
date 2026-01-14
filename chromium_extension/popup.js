@@ -48,7 +48,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     console.error('Check auth button not found!');
   }
-  saveForm.addEventListener('submit', handleSave);
+  
+  // Setup save listeners (will be set up when main screen is shown)
+  // This is done in showMainScreen() to ensure form is visible
+  setupSaveListeners();
+  
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   
   // Check for auth on popup open (in case user is already logged in)
@@ -77,6 +81,74 @@ function showLoginScreen() {
 function showMainScreen() {
   loginScreen.classList.add('hidden');
   mainScreen.classList.remove('hidden');
+  
+  // Ensure save form listeners are set up when main screen is shown
+  setupSaveListeners();
+}
+
+function setupSaveListeners() {
+  console.log('setupSaveListeners called');
+  const newSaveForm = document.getElementById('save-form');
+  const newSaveBtn = document.getElementById('save-btn');
+  
+  console.log('Form and button check:', { 
+    hasForm: !!newSaveForm, 
+    hasButton: !!newSaveBtn,
+    formVisible: newSaveForm ? !newSaveForm.classList.contains('hidden') : false,
+    buttonVisible: newSaveBtn ? !newSaveBtn.closest('.hidden') : false
+  });
+  
+  if (newSaveForm && !newSaveForm.hasAttribute('data-listener-attached')) {
+    console.log('Setting up save form submit listener');
+    newSaveForm.addEventListener('submit', (e) => {
+      console.log('=== SAVE FORM SUBMITTED ===');
+      e.preventDefault();
+      e.stopPropagation();
+      handleSave(e).catch(err => {
+        console.error('Error in handleSave:', err);
+        showSaveError('Error: ' + err.message);
+      });
+    });
+    newSaveForm.setAttribute('data-listener-attached', 'true');
+  } else if (newSaveForm) {
+    console.log('Save form listener already attached');
+  } else {
+    console.error('Save form not found!');
+  }
+  
+  if (newSaveBtn && !newSaveBtn.hasAttribute('data-listener-attached')) {
+    console.log('Setting up save button click listener');
+    newSaveBtn.addEventListener('click', (e) => {
+      console.log('=== SAVE BUTTON CLICKED ===');
+      e.preventDefault();
+      e.stopPropagation();
+      const form = document.getElementById('save-form');
+      if (form) {
+        console.log('Dispatching submit event on form');
+        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(submitEvent);
+      } else {
+        console.log('Form not found, calling handleSave directly');
+        handleSave(e).catch(err => {
+          console.error('Error in handleSave:', err);
+          showSaveError('Error: ' + err.message);
+        });
+      }
+    });
+    newSaveBtn.setAttribute('data-listener-attached', 'true');
+    
+    // Test if button is clickable
+    console.log('Button details:', {
+      disabled: newSaveBtn.disabled,
+      type: newSaveBtn.type,
+      tagName: newSaveBtn.tagName,
+      parentElement: newSaveBtn.parentElement?.tagName
+    });
+  } else if (newSaveBtn) {
+    console.log('Save button listener already attached');
+  } else {
+    console.error('Save button not found!');
+  }
 }
 
 async function loadCurrentPage() {
@@ -127,6 +199,9 @@ async function loadCurrentPage() {
     // Always hide loading and show form, even on error
     loading.classList.add('hidden');
     bookmarkForm.classList.remove('hidden');
+    
+    // Setup save listeners after form is shown
+    setupSaveListeners();
   }
 }
 
@@ -570,40 +645,81 @@ async function verifyAuth(apiBaseUrl, authData) {
 }
 
 async function handleSave(e) {
+  console.log('handleSave called', e);
   e.preventDefault();
   hideMessages();
 
-  const notes = document.getElementById('notes').value.trim();
-  const tagsInput = document.getElementById('tags').value.trim();
+  console.log('Getting form values...');
+  const notesEl = document.getElementById('notes');
+  const tagsEl = document.getElementById('tags');
+  
+  if (!notesEl || !tagsEl) {
+    console.error('Form elements not found!', { notesEl, tagsEl });
+    showSaveError('Form elements not found. Please refresh the extension.');
+    return;
+  }
+
+  const notes = notesEl.value.trim();
+  const tagsInput = tagsEl.value.trim();
   const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+
+  console.log('Form values:', { notes, tags, tagsInput });
 
   const saveBtn = document.getElementById('save-btn');
   const saveBtnText = document.getElementById('save-btn-text');
   const saveBtnLoading = document.getElementById('save-btn-loading');
 
+  if (!saveBtn || !saveBtnText || !saveBtnLoading) {
+    console.error('Save button elements not found!', { saveBtn, saveBtnText, saveBtnLoading });
+    showSaveError('Save button elements not found. Please refresh the extension.');
+    return;
+  }
+
+  console.log('Disabling save button...');
   saveBtn.disabled = true;
   saveBtnText.classList.add('hidden');
   saveBtnLoading.classList.remove('hidden');
 
   try {
+    console.log('Getting stored auth data...');
     const stored = await chrome.storage.local.get(['apiBaseUrl', 'authData']);
+    console.log('Stored data:', { 
+      hasApiUrl: !!stored.apiBaseUrl, 
+      hasAuthData: !!stored.authData,
+      apiUrl: stored.apiBaseUrl 
+    });
     
     if (!stored.apiBaseUrl || !stored.authData) {
       throw new Error('Not authenticated. Please sign in again.');
     }
 
+    if (!pageData || !pageData.url) {
+      throw new Error('Page data not available. Please refresh the page and try again.');
+    }
+
     // Create bookmark with token authentication
     const requestBody = {
       url: pageData.url,
-      title: pageData.title,
-      description: pageData.description,
+      title: pageData.title || '',
+      description: pageData.description || '',
       notes: notes,
       tags: tags
     };
     
-    console.log('Saving bookmark:', { url: requestBody.url, title: requestBody.title });
+    console.log('Saving bookmark:', { 
+      url: requestBody.url, 
+      title: requestBody.title,
+      description: requestBody.description,
+      notes: requestBody.notes,
+      tags: requestBody.tags
+    });
     console.log('API URL:', stored.apiBaseUrl);
+    console.log('Auth data:', { 
+      hasToken: !!stored.authData.token, 
+      hasModel: !!stored.authData.model 
+    });
     
+    console.log('Making API request...');
     const response = await fetch(`${stored.apiBaseUrl}/api/links`, {
       method: 'POST',
       headers: {
@@ -613,20 +729,29 @@ async function handleSave(e) {
       body: JSON.stringify(requestBody),
     });
     
-    console.log('Response status:', response.status, response.statusText);
+    console.log('Response received:', { 
+      status: response.status, 
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
 
     // Check if response is ok before parsing JSON
     if (!response.ok) {
+      console.error('Response not OK:', response.status, response.statusText);
       let errorMessage = 'Failed to save bookmark';
       try {
         const errorData = await response.json();
+        console.error('Error data:', errorData);
         errorMessage = errorData.error || errorMessage;
       } catch (e) {
+        console.error('Failed to parse error response:', e);
         // If JSON parsing fails, use status text
         errorMessage = response.statusText || errorMessage;
       }
       
       if (response.status === 401) {
+        console.error('Unauthorized - token expired');
         // Token expired, clear auth and show login
         await chrome.storage.local.remove(['authData', 'user']);
         throw new Error('Session expired. Please sign in again.');
@@ -634,16 +759,21 @@ async function handleSave(e) {
       throw new Error(errorMessage);
     }
 
+    console.log('Response OK, parsing JSON...');
     const data = await response.json();
+    console.log('Bookmark saved successfully:', data);
 
     showSuccess();
     setTimeout(() => {
+      console.log('Closing popup...');
       window.close();
     }, 1500);
   } catch (error) {
     console.error('Save error:', error);
+    console.error('Error stack:', error.stack);
     showSaveError(error.message || 'Failed to save bookmark');
   } finally {
+    console.log('Re-enabling save button...');
     saveBtn.disabled = false;
     saveBtnText.classList.remove('hidden');
     saveBtnLoading.classList.add('hidden');

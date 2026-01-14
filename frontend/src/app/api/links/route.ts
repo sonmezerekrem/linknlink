@@ -352,7 +352,53 @@ export async function POST(request: NextRequest) {
     const sanitizedTitle = (og.title || '').trim().slice(0, 500);
     const sanitizedDescription = (og.description || '').trim().slice(0, 2000);
     const sanitizedNotes = (notes || '').trim().slice(0, 5000);
-    const sanitizedTags = Array.isArray(tags) ? tags.filter((tag: any) => typeof tag === 'string' && tag.length <= 50) : [];
+    
+    // Process tags - extension sends tag names, but PocketBase expects tag IDs
+    // Convert tag names to tag IDs (find existing or create new tags)
+    let tagIds: string[] = [];
+    if (Array.isArray(tags) && tags.length > 0) {
+      const tagNames = tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0 && tag.trim().length <= 100);
+      
+      for (const tagName of tagNames) {
+        try {
+          const trimmedName = tagName.trim();
+          
+          // Try to find existing tag by name for this user
+          const existingTags = await pb.collection('tags').getFullList({
+            filter: `user = "${user.id}" && name = "${trimmedName.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}"`,
+            limit: 1,
+          });
+          
+          if (existingTags.length > 0) {
+            tagIds.push(existingTags[0].id);
+          } else {
+            // Create new tag if it doesn't exist
+            // Generate a random color for the tag
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            const newTag = await pb.collection('tags').create({
+              name: trimmedName,
+              color: randomColor,
+              user: user.id,
+            });
+            tagIds.push(newTag.id);
+          }
+        } catch (tagError: any) {
+          console.error('Error processing tag:', tagName, tagError);
+          // Continue with other tags even if one fails
+        }
+      }
+    }
+
+    console.log('Creating link with data:', {
+      url: url.trim(),
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      tagIds: tagIds,
+      notes: sanitizedNotes,
+      userId: user.id
+    });
 
     const link = await pb.collection('links').create({
       url: url.trim(),
@@ -360,7 +406,7 @@ export async function POST(request: NextRequest) {
       description: sanitizedDescription,
       og_image: (og.image || '').slice(0, 1000),
       og_site_name: (og.siteName || '').slice(0, 200),
-      tags: sanitizedTags,
+      tags: tagIds, // Use tag IDs, not names
       notes: sanitizedNotes,
       user: user.id,
       is_favorite: false,
@@ -373,8 +419,26 @@ export async function POST(request: NextRequest) {
     return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('POST /api/links error:', error?.data || error);
+    console.error('Error details:', {
+      message: error?.message,
+      data: error?.data,
+      status: error?.status,
+      response: error?.response
+    });
+    
+    // Provide more detailed error message
+    let errorMessage = 'Failed to create link';
+    if (error?.data?.message) {
+      errorMessage = error.data.message;
+    } else if (error?.message) {
+      errorMessage = error.message;
+    } else if (error?.data) {
+      // PocketBase errors often have data object with details
+      errorMessage = JSON.stringify(error.data);
+    }
+    
     const response = NextResponse.json(
-      { error: error?.data?.message || error?.message || 'Failed to create link' },
+      { error: errorMessage },
       { status: error?.status || 400 }
     );
     return addCorsHeaders(response, request);
