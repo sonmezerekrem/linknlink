@@ -2,8 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerPocketBase } from '@/lib/pocketbase-server';
 import { cookies } from 'next/headers';
 
-// Helper to get authenticated user
-async function getAuthenticatedUser() {
+// Helper to get authenticated user (supports both cookie and token auth)
+async function getAuthenticatedUser(request: NextRequest) {
+  const pb = getServerPocketBase();
+  
+  // Try token-based auth first (for extensions/API clients)
+  // Extension sends full auth data in X-Auth-Data header as JSON
+  const authDataHeader = request.headers.get('x-auth-data');
+  if (authDataHeader) {
+    try {
+      const authData = JSON.parse(authDataHeader);
+      if (authData.token && authData.model) {
+        pb.authStore.save(authData.token, authData.model);
+        // Verify token is still valid
+        if (pb.authStore.isValid) {
+          return authData.model;
+        }
+      }
+    } catch (error) {
+      // Invalid auth data, fall through to cookie auth
+    }
+  }
+  
+  // Fall back to cookie-based auth (for web app)
   const cookieStore = await cookies();
   const authCookie = cookieStore.get('pb_auth');
 
@@ -13,7 +34,6 @@ async function getAuthenticatedUser() {
 
   try {
     const authData = JSON.parse(authCookie.value);
-    const pb = getServerPocketBase();
     pb.authStore.save(authData.token, authData.model);
     return authData.model;
   } catch (error) {
@@ -127,12 +147,28 @@ async function fetchOpenGraph(url: string) {
   }
 }
 
+// Helper to add CORS headers
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Data');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  return response;
+}
+
+// Handle OPTIONS for CORS preflight
+export async function OPTIONS() {
+  const response = new NextResponse(null, { status: 204 });
+  return addCorsHeaders(response);
+}
+
 // GET - List links with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser();
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response);
     }
 
     const pb = getServerPocketBase();
@@ -186,13 +222,14 @@ export async function GET(request: NextRequest) {
       sort: '-created',
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       items: result.items,
       page: result.page,
       perPage: result.perPage,
       totalItems: result.totalItems,
       totalPages: result.totalPages,
     });
+    return addCorsHeaders(response);
   } catch (error: any) {
     console.error('GET /api/links error:', error?.data || error);
     return NextResponse.json(
@@ -207,9 +244,10 @@ export async function GET(request: NextRequest) {
 // POST - Create new link
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser();
+    const user = await getAuthenticatedUser(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return addCorsHeaders(response);
     }
 
     const pb = getServerPocketBase();
@@ -280,12 +318,14 @@ export async function POST(request: NextRequest) {
       expand: 'tags',
     });
 
-    return NextResponse.json(link);
+    const response = NextResponse.json(link);
+    return addCorsHeaders(response);
   } catch (error: any) {
     console.error('POST /api/links error:', error?.data || error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: error?.data?.message || error?.message || 'Failed to create link' },
       { status: error?.status || 400 }
     );
+    return addCorsHeaders(response);
   }
 }
