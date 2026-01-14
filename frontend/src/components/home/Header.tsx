@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserDropdown } from './UserDropdown';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Link2 } from 'lucide-react';
 import type { RecordModel } from 'pocketbase';
 
@@ -28,7 +29,10 @@ export function Header({ user }: HeaderProps) {
           </div>
           <span className="text-xl font-semibold">LinknLink</span>
         </div>
-        <UserDropdown user={user} onLogout={handleLogout} />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <UserDropdown user={user} onLogout={handleLogout} />
+        </div>
       </div>
     </header>
   );
