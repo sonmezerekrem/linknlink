@@ -84,13 +84,21 @@ async function loadCurrentPage() {
       return;
     }
 
-    // Get page data from content script
+    // Get page data from content script with timeout
     try {
-      const results = await chrome.tabs.sendMessage(tab.id, { action: 'getPageData' });
+      // Add timeout to prevent hanging forever
+      const messagePromise = chrome.tabs.sendMessage(tab.id, { action: 'getPageData' });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 2000)
+      );
+      
+      const results = await Promise.race([messagePromise, timeoutPromise]);
       pageData = results;
       displayPreview(results);
     } catch (error) {
+      // Content script might not be available, timed out, or page doesn't allow it
       // Fallback: use tab data
+      console.log('Content script unavailable, using tab data:', error.message);
       pageData = {
         url: tab.url,
         title: tab.title || 'Untitled',
@@ -103,6 +111,8 @@ async function loadCurrentPage() {
   } catch (error) {
     console.error('Error loading page:', error);
     showSaveError('Failed to load page data');
+  } finally {
+    // Always hide loading and show form, even on error
     loading.classList.add('hidden');
     bookmarkForm.classList.remove('hidden');
   }

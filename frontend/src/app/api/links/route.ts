@@ -14,13 +14,21 @@ async function getAuthenticatedUser(request: NextRequest) {
       const authData = JSON.parse(authDataHeader);
       if (authData.token && authData.model) {
         pb.authStore.save(authData.token, authData.model);
-        // Verify token is still valid
-        if (pb.authStore.isValid) {
-          return authData.model;
+        // Verify token is still valid by checking if we can access the user
+        try {
+          // Try to get the user to verify token is valid
+          const user = await pb.collection('users').getOne(authData.model.id);
+          if (user && pb.authStore.isValid) {
+            return authData.model;
+          }
+        } catch (error) {
+          // Token invalid, fall through to cookie auth
+          console.error('Token validation failed:', error);
         }
       }
     } catch (error) {
       // Invalid auth data, fall through to cookie auth
+      console.error('Invalid auth data header:', error);
     }
   }
   
@@ -179,31 +187,38 @@ export async function OPTIONS(request: NextRequest) {
 // GET - List links with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
+    const pb = getServerPocketBase();
+    
+    // Get authenticated user (supports both cookie and token auth)
     const user = await getAuthenticatedUser(request);
     if (!user) {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return addCorsHeaders(response, request);
     }
 
-    const pb = getServerPocketBase();
-    const cookieStore = await cookies();
-    const authCookie = cookieStore.get('pb_auth');
-    
-    if (!authCookie) {
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      return addCorsHeaders(response, request);
-    }
+    // If we authenticated via header, pb.authStore is already set
+    // Otherwise, get auth from cookie
+    const authDataHeader = request.headers.get('x-auth-data');
+    if (!authDataHeader) {
+      // Only check cookie if we didn't use header auth
+      const cookieStore = await cookies();
+      const authCookie = cookieStore.get('pb_auth');
+      
+      if (!authCookie) {
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
 
-    let authData;
-    try {
-      authData = JSON.parse(authCookie.value);
-    } catch (error) {
-      console.error('Invalid auth cookie:', error);
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      return addCorsHeaders(response, request);
+      let authData;
+      try {
+        authData = JSON.parse(authCookie.value);
+        pb.authStore.save(authData.token, authData.model);
+      } catch (error) {
+        console.error('Invalid auth cookie:', error);
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
     }
-
-    pb.authStore.save(authData.token, authData.model);
 
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
@@ -261,31 +276,38 @@ export async function GET(request: NextRequest) {
 // POST - Create new link
 export async function POST(request: NextRequest) {
   try {
+    const pb = getServerPocketBase();
+    
+    // Get authenticated user (supports both cookie and token auth)
     const user = await getAuthenticatedUser(request);
     if (!user) {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return addCorsHeaders(response, request);
     }
 
-    const pb = getServerPocketBase();
-    const cookieStore = await cookies();
-    const authCookie = cookieStore.get('pb_auth');
-    
-    if (!authCookie) {
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      return addCorsHeaders(response, request);
-    }
+    // If we authenticated via header, pb.authStore is already set
+    // Otherwise, get auth from cookie
+    const authDataHeader = request.headers.get('x-auth-data');
+    if (!authDataHeader) {
+      // Only check cookie if we didn't use header auth
+      const cookieStore = await cookies();
+      const authCookie = cookieStore.get('pb_auth');
+      
+      if (!authCookie) {
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
 
-    let authData;
-    try {
-      authData = JSON.parse(authCookie.value);
-    } catch (error) {
-      console.error('Invalid auth cookie:', error);
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      return addCorsHeaders(response, request);
+      let authData;
+      try {
+        authData = JSON.parse(authCookie.value);
+        pb.authStore.save(authData.token, authData.model);
+      } catch (error) {
+        console.error('Invalid auth cookie:', error);
+        const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return addCorsHeaders(response, request);
+      }
     }
-
-    pb.authStore.save(authData.token, authData.model);
 
     const body = await request.json();
     const { url, tags, notes } = body;

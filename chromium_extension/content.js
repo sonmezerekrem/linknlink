@@ -36,10 +36,23 @@ function extractPageData() {
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getPageData') {
-    const data = extractPageData();
-    sendResponse(data);
+    try {
+      const data = extractPageData();
+      sendResponse(data);
+    } catch (error) {
+      console.error('Error extracting page data:', error);
+      // Send fallback data on error
+      sendResponse({
+        url: window.location.href,
+        title: document.title || 'Untitled',
+        description: '',
+        image: '',
+        siteName: ''
+      });
+    }
     return true; // Keep message channel open for async response
   }
+  return false;
 });
 
 // Also send data when page loads (for faster access)
