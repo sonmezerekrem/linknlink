@@ -294,7 +294,6 @@ export async function POST(request: NextRequest) {
         const headerAuthData = JSON.parse(authDataHeader);
         if (headerAuthData.token && headerAuthData.model) {
           pb.authStore.save(headerAuthData.token, headerAuthData.model);
-          console.log('Auth set from header for POST');
         }
       } catch (e) {
         console.error('Error parsing header auth data in POST:', e);
@@ -336,12 +335,7 @@ export async function POST(request: NextRequest) {
       return addCorsHeaders(response, request);
     }
     
-    console.log('PocketBase auth status before create:', {
-      isValid: pb.authStore.isValid,
-      userId: pb.authStore.model?.id,
-      tokenPresent: !!pb.authStore.token,
-      expectedUserId: user.id
-    });
+    // Auth verified, proceed with creating link
 
     const body = await request.json();
     const { url, tags, notes, title, description } = body;
@@ -426,8 +420,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure PocketBase auth is set correctly
-    // If we authenticated via header, pb.authStore should already be set
-    // But let's make sure it's still valid
     if (!pb.authStore.isValid) {
       console.error('PocketBase auth store is not valid!');
       const response = NextResponse.json(
@@ -436,12 +428,6 @@ export async function POST(request: NextRequest) {
       );
       return addCorsHeaders(response, request);
     }
-    
-    console.log('PocketBase auth check:', {
-      isValid: pb.authStore.isValid,
-      userId: pb.authStore.model?.id,
-      token: pb.authStore.token ? 'present' : 'missing'
-    });
     
     // Prepare link data - ensure no empty strings for optional fields
     const linkData: any = {
@@ -471,14 +457,7 @@ export async function POST(request: NextRequest) {
       linkData.tags = tagIds;
     }
 
-    console.log('Creating link with data:', linkData);
-    console.log('PocketBase collection:', 'links');
-    console.log('User ID:', user.id);
-    console.log('Auth before create:', {
-      isValid: pb.authStore.isValid,
-      authId: pb.authStore.model?.id,
-      tokenPresent: !!pb.authStore.token
-    });
+    // Create the link
 
     try {
       // Double-check auth is set before creating
@@ -489,8 +468,6 @@ export async function POST(request: NextRequest) {
       const link = await pb.collection('links').create(linkData, {
         expand: 'tags',
       });
-      
-      console.log('Link created successfully:', link.id);
       
       const response = NextResponse.json(link);
       return addCorsHeaders(response, request);
