@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
     // Auth verified, proceed with creating link
 
     const body = await request.json();
-    const { url, tags, notes, title, description } = body;
+    const { url, tags, notes, title, description, og_image, og_site_name } = body;
 
     if (!url || typeof url !== 'string' || !url.trim()) {
       const response = NextResponse.json(
@@ -359,13 +359,35 @@ export async function POST(request: NextRequest) {
       return addCorsHeaders(response, request);
     }
 
-    // Use provided title/description from extension, or fetch OpenGraph data
+    // Use provided title/description/image from extension, or fetch OpenGraph data
     let og: { title?: string; description?: string; image?: string; siteName?: string } = {};
     
     // If title/description are provided (from extension), use them
     if (title || description) {
       og.title = title;
       og.description = description;
+      // Also use provided image and siteName if available
+      if (og_image) {
+        og.image = og_image;
+      }
+      if (og_site_name) {
+        og.siteName = og_site_name;
+      }
+      // If image/siteName not provided but we have title/description, still try to fetch them
+      if (!og.image || !og.siteName) {
+        try {
+          const fetchedOg = await fetchOpenGraph(url);
+          // Only use fetched data for fields we don't have
+          if (!og.image && fetchedOg.image) {
+            og.image = fetchedOg.image;
+          }
+          if (!og.siteName && fetchedOg.siteName) {
+            og.siteName = fetchedOg.siteName;
+          }
+        } catch (ogError) {
+          console.warn('OpenGraph fetch failed for image/siteName, continuing without:', ogError);
+        }
+      }
     } else {
       // Otherwise, fetch OpenGraph data (best-effort, non-blocking)
       try {

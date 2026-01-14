@@ -715,7 +715,9 @@ async function handleSave(e) {
       title: pageData.title || '',
       description: pageData.description || '',
       notes: notes,
-      tags: tags
+      tags: tags,
+      og_image: pageData.image || '',
+      og_site_name: pageData.siteName || ''
     };
     
     console.log('Saving bookmark:', { 
@@ -723,7 +725,9 @@ async function handleSave(e) {
       title: requestBody.title,
       description: requestBody.description,
       notes: requestBody.notes,
-      tags: requestBody.tags
+      tags: requestBody.tags,
+      og_image: requestBody.og_image,
+      og_site_name: requestBody.og_site_name
     });
     console.log('API URL:', stored.apiBaseUrl);
     console.log('Auth data:', { 
