@@ -42,11 +42,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Event listeners
   loginBtn.addEventListener('click', handleLoginClick);
+  const checkAuthBtn = document.getElementById('check-auth-btn');
+  if (checkAuthBtn) {
+    checkAuthBtn.addEventListener('click', handleCheckAuth);
+  } else {
+    console.error('Check auth button not found!');
+  }
   saveForm.addEventListener('submit', handleSave);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   
-  // Check for auth on popup open (in case user just logged in)
-  checkAuthFromCookies();
+  // Check for auth on popup open (in case user is already logged in)
+  // This will automatically detect if user is already authenticated
+  const wasAuthenticated = await checkAuthFromCookies();
+  
+  // If not authenticated, show login screen
+  if (!wasAuthenticated) {
+    showLoginScreen();
+  }
   
   // Cleanup on popup close
   window.addEventListener('beforeunload', () => {
@@ -182,7 +194,14 @@ async function handleLoginClick() {
     // Store API URL
     await chrome.storage.local.set({ apiBaseUrl: normalizedApiUrl });
     
-    // Open login page
+    // First, check if user is already authenticated
+    const alreadyAuth = await checkAuthFromCookies();
+    if (alreadyAuth) {
+      // Already authenticated, no need to open login page
+      return;
+    }
+    
+    // Open login page (or home page if already logged in)
     const loginUrl = `${normalizedApiUrl}/login`;
     await chrome.tabs.create({ url: loginUrl });
     
@@ -195,6 +214,94 @@ async function handleLoginClick() {
   } catch (error) {
     showLoginError(error.message || 'Invalid URL. Please enter a valid HTTPS URL.');
     loginBtn.disabled = false;
+  }
+}
+
+async function handleCheckAuth() {
+  console.log('handleCheckAuth called');
+  hideMessages();
+  
+  const statusP = loginStatus.querySelector('p');
+  if (!statusP) {
+    showLoginError('Error: Status element not found');
+    return;
+  }
+  
+  loginStatus.classList.remove('hidden');
+  statusP.textContent = 'Checking authentication...';
+  
+  const apiUrlInput = document.getElementById('api-url');
+  if (!apiUrlInput) {
+    showLoginError('Error: API URL input not found');
+    loginStatus.classList.add('hidden');
+    return;
+  }
+  
+  const apiUrl = apiUrlInput.value.trim();
+  
+  if (!apiUrl) {
+    showLoginError('Please enter your LinknLink URL first');
+    loginStatus.classList.add('hidden');
+    return;
+  }
+
+  try {
+    console.log('Validating URL:', apiUrl);
+    const normalizedApiUrl = validateApiUrl(apiUrl);
+    console.log('Normalized URL:', normalizedApiUrl);
+    await chrome.storage.local.set({ apiBaseUrl: normalizedApiUrl });
+    
+    statusP.textContent = 'Looking for authentication cookie...';
+    
+    console.log('Calling checkAuthFromCookies...');
+    const authenticated = await checkAuthFromCookies();
+    console.log('Authentication result:', authenticated);
+    
+    if (!authenticated) {
+      loginStatus.classList.add('hidden');
+      // Try to get more info about why it failed
+      const urlObj = new URL(normalizedApiUrl);
+      try {
+        console.log('Getting all cookies for domain:', urlObj.hostname);
+        const allCookies = await chrome.cookies.getAll({ domain: urlObj.hostname });
+        console.log('All cookies found:', allCookies.length, allCookies);
+        
+        const pbAuthCookie = allCookies.find(c => c.name === 'pb_auth');
+        const cookieNames = allCookies.map(c => c.name).join(', ');
+        
+        if (pbAuthCookie) {
+          // Cookie exists, but something else is wrong
+          if (!pbAuthCookie.value || pbAuthCookie.value.trim() === '') {
+            showLoginError('pb_auth cookie found but is empty. Please log out and log back in on the website.');
+          } else {
+            try {
+              const testParse = JSON.parse(pbAuthCookie.value);
+              if (!testParse.token || !testParse.model) {
+                showLoginError('pb_auth cookie found but missing token or user data. Please log out and log back in.');
+              } else {
+                showLoginError('pb_auth cookie found but token validation failed. The session may have expired. Please refresh the website and try again.');
+              }
+            } catch (e) {
+              showLoginError('pb_auth cookie found but cannot be parsed. Please log out and log back in on the website.');
+            }
+          }
+        } else if (cookieNames) {
+          showLoginError(`Not authenticated. Found cookies: ${cookieNames}, but pb_auth is missing. Please log in on the website.`);
+        } else {
+          showLoginError(`Not authenticated. No cookies found for ${urlObj.hostname}. Please log in on the website first.`);
+        }
+      } catch (e) {
+        console.error('Error getting cookies:', e);
+        showLoginError('Not authenticated. Error checking cookies: ' + e.message);
+      }
+    } else {
+      statusP.textContent = 'Authentication successful!';
+      // If authenticated, checkAuthFromCookies will show the main screen
+    }
+  } catch (error) {
+    console.error('Check auth error:', error);
+    loginStatus.classList.add('hidden');
+    showLoginError(error.message || 'Failed to check authentication: ' + error.toString());
   }
 }
 
@@ -239,6 +346,7 @@ async function checkAuthFromCookies() {
   const stored = await chrome.storage.local.get(['apiBaseUrl']);
   
   if (!stored.apiBaseUrl) {
+    console.error('No API URL stored');
     return false;
   }
   
@@ -247,34 +355,140 @@ async function checkAuthFromCookies() {
     let apiUrl;
     try {
       apiUrl = validateApiUrl(stored.apiBaseUrl);
+      console.log('Checking auth for URL:', apiUrl);
     } catch (error) {
       console.error('Invalid stored API URL:', error);
       return false;
     }
     
-    // Parse the domain from the API URL
-    const url = new URL(apiUrl);
-    
     // Security: Only read cookies from the exact domain specified
-    // This prevents reading cookies from other domains
-    const cookie = await chrome.cookies.get({
-      url: apiUrl, // Use full URL to ensure exact domain match
-      name: 'pb_auth'
-    });
+    // Try multiple methods to find the cookie
+    const urlObj = new URL(apiUrl);
+    let cookie = null;
     
-    if (!cookie || !cookie.value) {
+    // Method 1: Try with full URL
+    try {
+      cookie = await chrome.cookies.get({
+        url: apiUrl,
+        name: 'pb_auth'
+      });
+    } catch (e) {
+      console.log('Method 1 failed:', e);
+    }
+    
+    // Method 2: Try with domain only
+    if (!cookie) {
+      try {
+        cookie = await chrome.cookies.get({
+          url: `${urlObj.protocol}//${urlObj.hostname}`,
+          name: 'pb_auth'
+        });
+      } catch (e) {
+        console.log('Method 2 failed:', e);
+      }
+    }
+    
+    // Method 3: Get all cookies for domain and find pb_auth manually
+    if (!cookie) {
+      try {
+        const allCookies = await chrome.cookies.getAll({ domain: urlObj.hostname });
+        console.log('All cookies for domain:', allCookies.map(c => ({ name: c.name, domain: c.domain, path: c.path, hasValue: !!c.value })));
+        cookie = allCookies.find(c => c.name === 'pb_auth');
+        if (cookie) {
+          console.log('Found pb_auth cookie via getAll:', { 
+            domain: cookie.domain, 
+            path: cookie.path,
+            hasValue: !!cookie.value,
+            valueLength: cookie.value ? cookie.value.length : 0
+          });
+        }
+      } catch (e) {
+        console.error('Error getting all cookies:', e);
+      }
+    }
+    
+    // Method 4: Try with www prefix or without
+    if (!cookie && !urlObj.hostname.startsWith('www.')) {
+      try {
+        cookie = await chrome.cookies.get({
+          url: `${urlObj.protocol}//www.${urlObj.hostname}`,
+          name: 'pb_auth'
+        });
+      } catch (e) {
+        console.log('Method 4 failed:', e);
+      }
+    }
+    
+    if (!cookie) {
+      console.error('No auth cookie found for URL:', apiUrl);
+      console.error('Tried domain:', urlObj.hostname);
       return false;
     }
     
-    // Parse the cookie value (it's JSON)
-    const authData = JSON.parse(cookie.value);
+    if (!cookie.value || cookie.value.trim() === '') {
+      console.error('Cookie found but value is empty!', cookie);
+      // Show in UI for debugging
+      if (loginStatus && !loginStatus.classList.contains('hidden')) {
+        loginStatus.querySelector('p').textContent = `Cookie found but value is empty`;
+      }
+      return false;
+    }
+    
+    console.log('Found auth cookie with value:', { 
+      domain: cookie.domain, 
+      path: cookie.path, 
+      secure: cookie.secure,
+      httpOnly: cookie.httpOnly,
+      valueLength: cookie.value.length,
+      valuePreview: cookie.value.substring(0, 50) + '...'
+    });
+    
+    // Parse the cookie value (it's JSON, but may be URL-encoded)
+    let authData;
+    try {
+      // The cookie value might be URL-encoded, so decode it first
+      let cookieValue = cookie.value;
+      
+      // Check if it's URL-encoded (starts with %)
+      if (cookieValue.startsWith('%')) {
+        console.log('Cookie value is URL-encoded, decoding...');
+        cookieValue = decodeURIComponent(cookieValue);
+        console.log('Decoded cookie value length:', cookieValue.length);
+      }
+      
+      authData = JSON.parse(cookieValue);
+      console.log('Successfully parsed auth data:', { 
+        hasToken: !!authData.token, 
+        hasModel: !!authData.model,
+        tokenPreview: authData.token ? authData.token.substring(0, 20) + '...' : 'none',
+        modelId: authData.model ? authData.model.id : 'none'
+      });
+    } catch (error) {
+      console.error('Failed to parse auth cookie:', error);
+      console.error('Cookie value (first 200 chars):', cookie.value.substring(0, 200));
+      // Try URL decoding if direct parse failed
+      if (cookie.value.startsWith('%')) {
+        try {
+          const decoded = decodeURIComponent(cookie.value);
+          console.log('Retrying with decoded value...');
+          authData = JSON.parse(decoded);
+          console.log('Successfully parsed after decoding!');
+        } catch (decodeError) {
+          console.error('Failed even after URL decoding:', decodeError);
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
     
     if (!authData.token || !authData.model) {
+      console.log('Auth cookie missing token or model');
       return false;
     }
     
     // Verify the auth is valid
-    const isValid = await verifyAuth(stored.apiBaseUrl, authData);
+    const isValid = await verifyAuth(apiUrl, authData);
     
     if (isValid) {
       // Store auth data
@@ -284,7 +498,7 @@ async function checkAuthFromCookies() {
       });
       
       authToken = authData.token;
-      apiBaseUrl = stored.apiBaseUrl;
+      apiBaseUrl = apiUrl;
       
       // Clear any polling
       if (authCheckInterval) {
@@ -297,6 +511,8 @@ async function checkAuthFromCookies() {
       loadCurrentPage();
       
       return true;
+    } else {
+      console.log('Auth token validation failed');
     }
     
     return false;
@@ -308,6 +524,13 @@ async function checkAuthFromCookies() {
 
 async function verifyAuth(apiBaseUrl, authData) {
   try {
+    console.log('Verifying auth with API:', apiBaseUrl);
+    console.log('Auth data:', { 
+      hasToken: !!authData.token, 
+      hasModel: !!authData.model,
+      modelId: authData.model?.id 
+    });
+    
     // Try to make an authenticated request to verify the token
     const response = await fetch(`${apiBaseUrl}/api/auth/me`, {
       method: 'GET',
@@ -317,13 +540,31 @@ async function verifyAuth(apiBaseUrl, authData) {
       }
     });
     
+    console.log('Auth verification response status:', response.status, response.statusText);
+    
     if (response.ok) {
       const data = await response.json();
-      return data.user !== null;
+      console.log('Auth verification result:', data.user ? 'Authenticated' : 'Not authenticated');
+      if (data.user) {
+        console.log('User ID:', data.user.id);
+      }
+      return data.user !== null && data.user !== undefined;
     }
     
+    // Try to get error details
+    let errorText = response.statusText;
+    try {
+      const errorData = await response.json();
+      errorText = errorData.error || errorText;
+    } catch (e) {
+      // Ignore JSON parse errors
+    }
+    
+    console.error('Auth verification failed:', response.status, errorText);
     return false;
   } catch (error) {
+    console.error('Auth verification error:', error);
+    console.error('Error details:', error.message, error.stack);
     return false;
   }
 }
@@ -352,31 +593,48 @@ async function handleSave(e) {
     }
 
     // Create bookmark with token authentication
+    const requestBody = {
+      url: pageData.url,
+      title: pageData.title,
+      description: pageData.description,
+      notes: notes,
+      tags: tags
+    };
+    
+    console.log('Saving bookmark:', { url: requestBody.url, title: requestBody.title });
+    console.log('API URL:', stored.apiBaseUrl);
+    
     const response = await fetch(`${stored.apiBaseUrl}/api/links`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Auth-Data': JSON.stringify(stored.authData)
       },
-      body: JSON.stringify({
-        url: pageData.url,
-        title: pageData.title,
-        description: pageData.description,
-        notes: notes,
-        tags: tags
-      }),
+      body: JSON.stringify(requestBody),
     });
+    
+    console.log('Response status:', response.status, response.statusText);
 
-    const data = await response.json();
-
+    // Check if response is ok before parsing JSON
     if (!response.ok) {
+      let errorMessage = 'Failed to save bookmark';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        // If JSON parsing fails, use status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      
       if (response.status === 401) {
         // Token expired, clear auth and show login
         await chrome.storage.local.remove(['authData', 'user']);
         throw new Error('Session expired. Please sign in again.');
       }
-      throw new Error(data.error || 'Failed to save bookmark');
+      throw new Error(errorMessage);
     }
+
+    const data = await response.json();
 
     showSuccess();
     setTimeout(() => {
@@ -393,11 +651,34 @@ async function handleSave(e) {
 }
 
 async function handleLogout() {
-  await chrome.storage.local.remove(['authData', 'apiBaseUrl', 'user']);
-  authToken = null;
-  apiBaseUrl = null;
-  showLoginScreen();
-  document.getElementById('api-url').value = '';
+  try {
+    // Clear all stored data
+    await chrome.storage.local.remove(['authData', 'apiBaseUrl', 'user']);
+    authToken = null;
+    apiBaseUrl = null;
+    
+    // Clear any auth check intervals
+    if (authCheckInterval) {
+      clearInterval(authCheckInterval);
+      authCheckInterval = null;
+    }
+    
+    // Show login screen
+    showLoginScreen();
+    
+    // Clear the API URL field if it exists
+    const apiUrlField = document.getElementById('api-url');
+    if (apiUrlField) {
+      apiUrlField.value = '';
+    }
+    
+    // Hide any error messages
+    hideMessages();
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Still try to show login screen even if there's an error
+    showLoginScreen();
+  }
 }
 
 function showLoginError(message) {

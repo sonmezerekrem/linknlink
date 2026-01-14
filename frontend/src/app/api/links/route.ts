@@ -310,32 +310,42 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { url, tags, notes } = body;
+    const { url, tags, notes, title, description } = body;
 
     if (!url || typeof url !== 'string' || !url.trim()) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'URL is required' },
         { status: 400 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Validate URL format
     try {
       new URL(url);
     } catch {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Invalid URL format' },
         { status: 400 }
       );
+      return addCorsHeaders(response, request);
     }
 
-    // Fetch OpenGraph data (best-effort, non-blocking)
+    // Use provided title/description from extension, or fetch OpenGraph data
     let og: { title?: string; description?: string; image?: string; siteName?: string } = {};
-    try {
-      og = await fetchOpenGraph(url);
-    } catch (ogError) {
-      console.warn('OpenGraph fetch failed, continuing without metadata:', ogError);
-      // Continue without OpenGraph data
+    
+    // If title/description are provided (from extension), use them
+    if (title || description) {
+      og.title = title;
+      og.description = description;
+    } else {
+      // Otherwise, fetch OpenGraph data (best-effort, non-blocking)
+      try {
+        og = await fetchOpenGraph(url);
+      } catch (ogError) {
+        console.warn('OpenGraph fetch failed, continuing without metadata:', ogError);
+        // Continue without OpenGraph data
+      }
     }
 
     // Sanitize and validate input
