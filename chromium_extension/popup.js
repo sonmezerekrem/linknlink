@@ -219,6 +219,7 @@ function displayPreview(data) {
     imageEl.style.backgroundImage = `url(${data.image})`;
     imageEl.classList.add('has-image');
   } else {
+    imageEl.style.backgroundImage = '';
     imageEl.classList.remove('has-image');
   }
 }
