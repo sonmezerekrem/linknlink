@@ -16,6 +16,15 @@ const loginStatus = document.getElementById('login-status');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  // Apply theme based on browser preference
+  applyTheme();
+  
+  // Listen for theme changes
+  if (window.matchMedia) {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', applyTheme);
+  }
+  
   // Check if user is authenticated
   const stored = await chrome.storage.local.get(['authData', 'apiBaseUrl', 'user']);
   
@@ -76,6 +85,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 });
+
+// Apply theme based on browser preference
+function applyTheme() {
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark');
+  }
+}
 
 function showLoginScreen() {
   loginScreen.classList.remove('hidden');
