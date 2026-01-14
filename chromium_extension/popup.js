@@ -53,7 +53,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // This is done in showMainScreen() to ensure form is visible
   setupSaveListeners();
   
-  document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  // Setup logout button listener (button exists in main screen)
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', handleLogout);
+  }
   
   // Check for auth on popup open (in case user is already logged in)
   // This will automatically detect if user is already authenticated
@@ -84,6 +88,13 @@ function showMainScreen() {
   
   // Ensure save form listeners are set up when main screen is shown
   setupSaveListeners();
+  
+  // Ensure logout button listener is set up
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn && !logoutBtn.hasAttribute('data-listener-attached')) {
+    logoutBtn.addEventListener('click', handleLogout);
+    logoutBtn.setAttribute('data-listener-attached', 'true');
+  }
 }
 
 function setupSaveListeners() {
