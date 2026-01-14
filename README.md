@@ -7,6 +7,15 @@
 ![PocketBase](https://img.shields.io/badge/PocketBase-Latest-B8DBE4?style=for-the-badge)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.0-38B2AC?style=for-the-badge&logo=tailwind-css)
 
+## 📸 Screenshots
+
+<div align="center">
+  <img src="screenshoots/image1.png" alt="LinknLink Screenshot 1" width="45%" style="margin: 10px;">
+  <img src="screenshoots/image2.png" alt="LinknLink Screenshot 2" width="45%" style="margin: 10px;">
+  <img src="screenshoots/image3.png" alt="LinknLink Screenshot 3" width="45%" style="margin: 10px;">
+  <img src="screenshoots/image4.png" alt="LinknLink Screenshot 4" width="45%" style="margin: 10px;">
+</div>
+
 ## ✨ Features
 
 ### 🎯 Core Functionality
