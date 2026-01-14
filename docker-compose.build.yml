@@ -1,6 +1,8 @@
 services:
   backend:
-    image: ghcr.io/sonmezerekrem/linknlink/backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: linknlink-backend
     restart: unless-stopped
     volumes:
@@ -19,7 +21,9 @@ services:
       - linknlink-network
 
   frontend:
-    image: ghcr.io/sonmezerekrem/linknlink/frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: linknlink-frontend
     restart: unless-stopped
     environment:
@@ -37,8 +41,6 @@ services:
       - backend
     networks:
       - linknlink-network
-    ports:
-      - "3000:3000"
 
 volumes:
   backend_data:
